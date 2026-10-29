@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stmmlib"
+version = "0.1.0"
+description = "Family-aware spatio-temporal mixed models (Gaussian + Beta) with optional GPU acceleration"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Ghardapaty Ghiffary"},
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "pandas>=2.0",
+]
+
+[project.optional-dependencies]
+gpu = ["cupy-cuda12x>=13.0", "torch>=2.0"]
+dev = ["pytest>=7.0", "pytest-cov"]
+
+[tool.setuptools.packages.find]
+include = ["stmmlib*"]
