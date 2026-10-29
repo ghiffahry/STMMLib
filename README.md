@@ -161,7 +161,7 @@ Rincian API ringkas tersedia di `docs/API.md`.
   title  = {<judul tesis>},
   school = {IPB University},
   year   = {<tahun>},
-  note   = {Pustaka penelitian: \url{https://github.com/ghiffary/STMMLib}}
+  note   = {Pustaka penelitian: \url{https://github.com/ghiffahry/STMMLib}}
 }
 ```
 
