@@ -1,172 +1,163 @@
-# STMMLib
+# stmmlib
 
-**Pustaka model campuran spatio-temporal untuk data panel area, dengan keluarga
-sebaran Gaussian dan Beta.**
+Spatio-temporal mixed models for areal panel data, with Gaussian and Beta
+families behind one API.
 
-## Abstrak
+## Overview
 
-STMMLib menyediakan satu antarmuka pemodelan untuk data panel area yang
-menggabungkan efek acak wilayah, efek acak waktu, dan struktur korelasi spasial
-melalui matriks pembobot `W`. Dua keluarga sebaran didukung: Gaussian dengan
-pendugaan kemungkinan maksimum (ML/REML), dan Beta dengan pendugaan kemungkinan
-maksimum beraproksimasi Laplace disertai sertifikat kelengkungan Hessian. Setiap
-model menghasilkan penduga efek tetap beserta galat bakunya, komponen varians,
-serta prediksi area melalui EBLUP (Gaussian) atau EBP (Beta). Pustaka ini
-dikembangkan sebagai perangkat penelitian tesis dan diuji dengan uji invariansi
-yang memastikan penambahan modul prediksi tidak mengubah hasil pendugaan.
+`stmmlib` fits area-level panel models that combine spatial random effects
+(IID, SAR, nested, SEBLUP Rao-Yu), temporal random effects (IID, AR(1)), and
+optional area-time interactions. Two likelihood families are available, so the
+same model structure can be fitted to continuous responses or to proportions.
 
-## 1. Spesifikasi model
+The package was developed for small area estimation on Indonesian district
+poverty data and is published as a reference implementation for that work.
 
-Untuk unit area `i = 1, ..., m` dan waktu `t = 1, ..., T`:
+## Features
 
-```
-y_it = x_it' beta + b_i + u_t + e_it
-```
+- 14 model structures (M1 to M14) plus a Beta regression baseline
+- Gaussian family: ML and REML by marginal likelihood
+- Beta family: Laplace-approximated ML with convergence certificates (gradient
+  norm, Hessian positive definiteness, iteration count)
+- Prediction: EBLUP for Gaussian, EBP from posterior draws for Beta, both
+  in-sample and for same-area holdout
+- Configurable column names, so data does not need renaming
+- Optional GPU backend through CuPy or PyTorch
 
-dengan `b` efek acak area (IID, SAR, nested, atau SEBLUP Rao-Yu), `u` efek acak
-waktu (IID atau AR(1)), dan `e` galat residual. Struktur interaksi area-waktu
-(Tipe I sampai IV) tersedia untuk memisahkan komponen utama dari komponen
-interaksi.
+## Installation
 
-Kontrak pengurutan yang harus dipenuhi: baris dan kolom ke-`i` matriks `W`
-bersesuaian dengan area ke-`i` dalam urutan terurut (`pd.Categorical`
-mengurutkan kategori sebelum memberi kode). Pelanggaran kontrak ini tidak
-menghasilkan galat, tetapi menghasilkan penduga yang salah.
+The package is not on PyPI yet. Install from source:
 
-## 2. Struktur model
-
-Registry memuat 14 model struktural dan satu model regresi Beta tanpa efek acak.
-`n_var` adalah jumlah parameter varians, tidak termasuk efek tetap.
-
-| ID | Efek area | Efek waktu | Cakupan waktu | Interaksi | n_var (Gauss/Beta) |
-|---|---|---|---|---|---|
-| `m1_iid_iid` | IID | IID | per area | - | 3 / 3 |
-| `m2_iid_ar1` | IID | AR(1) | per area | - | 4 / 4 |
-| `m3_sar_iid` | SAR | IID | per area | - | 4 / 4 |
-| `m4_sar_ar1` | SAR | AR(1) | global | - | 5 / 5 |
-| `m5_seblup_rao_yu_it` | SEBLUP Rao-Yu | AR(1) | per area | - | 5 / 5 |
-| `m6_nested_iid_iid` | nested IID | IID | per area | - | 4 / 4 |
-| `m7_nested_ar1` | nested SAR | AR(1) | per area | - | 5 / 5 |
-| `m8_iid_iid_int` | IID | IID | per area | IID | 4 / 4 |
-| `m9_sar_iid_int` | SAR | IID | per area | spasial | 6 / 6 |
-| `m10_iid_ar1_int` | IID | AR(1) | per area | temporal | 6 / 6 |
-| `m11_sar_ar1_int` | SAR | AR(1) | global | spatio-temporal | 8 / 8 |
-| `m12_seblup_rao_yu_it_int` | SEBLUP Rao-Yu | AR(1) | per area | spatio-temporal | 8 / 8 |
-| `m13_nested_iid_iid_int` | nested IID | IID | per area | temporal | 6 / 6 |
-| `m14_nested_ar1_int` | nested SAR | AR(1) | per area | IID | 6 / 6 |
-| `beta_regression` | - | - | - | - | 0 / 2 |
-
-## 3. Pendugaan dan prediksi
-
-**Gaussian.** Kemungkinan marginal dimaksimumkan dengan ML atau REML; ragam
-efek acak diperoleh dari optimasi kuasi-Newton dengan batas. Prediksi area
-memakai EBLUP, yaitu `E[b | y]` pada parameter varians hasil pendugaan.
-
-**Beta.** Kemungkinan maksimum didekati dengan aproksimasi Laplace, karena
-integral marginal tidak tertutup. Setiap hasil fit menyertakan sertifikat
-kelengkungan: norma gradien, ketermenentuan positif Hessian, dan jumlah
-iterasi, sehingga status `konvergen` dapat dibedakan dari `invalid`.
-
-**Skala koefisien.** Pada keluarga Beta, prediktor distandardisasi secara
-internal sebelum optimasi. Nilai yang disimpan sebagai `beta_std` berada pada
-skala terstandardisasi; tabel dan interpretasi harus memakai `beta_original`
-disertai `se_original` agar satuan kembali ke satuan prediktor asli.
-
-**Prediksi.** `ebp()` menghasilkan prediksi in-sample, `ebp_newdata()`
-menghasilkan prediksi holdout untuk area yang sama, sedangkan area yang tidak
-pernah teramati ditolak secara eksplisit. Validasi silang blok ruang pada
-versi ini hanya mendukung prediksi efek tetap.
-
-Catatan metodologis: EBP di sini berarti `E[mu | y]` yang dihitung dari
-undian posterior. Ini bukan EBP Molina-Rao, dan galat perkiraan kuadrat tengah
-(prinsip Prasad-Rao atau bootstrap) belum diimplementasikan untuk kedua
-keluarga sebaran.
-
-## 4. Tumpukan teknologi
-
-| Lapisan | Komponen | Peran |
-|---|---|---|
-| Bahasa | Python >= 3.10 | implementasi tunggal untuk kedua keluarga |
-| Komputasi | NumPy >= 1.24 | aljabar matriks, kolokasi Cholesky, undian normal |
-| Optimasi | SciPy >= 1.11 | L-BFGS-B, matriks jarang, fungsi khusus |
-| Data | pandas >= 2.0 | panel, kategori area, penanganan data hilang |
-| Akselerasi | CuPy / PyTorch (opsional, ekstra `[gpu]`) | operasi array di GPU, diimpor dengan pengaman |
-| Pengujian | pytest >= 7, pytest-cov | uji invariansi, uji regresi, uji kecocokan solusi |
-| Paket | setuptools + wheel | backend build, distribusi wheel murni Python |
-| Lingkungan | uv | kunci dependensi (`uv.lock`) |
-
-Seluruh dependensi inti murni CPU. `cupy` dan `torch` hanya dibutuhkan bila
-ekstra `[gpu]` dipasang.
-
-## 5. Instalasi dan penggunaan
-
-```powershell
+```bash
+git clone https://github.com/ghiffahry/STMMLib.git
+cd STMMLib
 pip install -e .
 ```
 
+For the optional GPU backend:
+
+```bash
+pip install -e ".[gpu]"
+```
+
+## Quick start
+
+Gaussian fit:
+
 ```python
+import pandas as pd
 from stmmlib.stmm import stmm
 
+df = pd.read_csv("panel.csv")  # needs y, area, time, and predictor columns
+
+# W must be m x m, row standardised, with rows ordered like sorted(area)
+fit = stmm(
+    data=df,
+    model="m3_sar_iid",
+    family="gaussian",
+    W=W,
+    method="REML",
+    area_col="area",
+    time_col="time",
+    gpu="no",
+)
+
+fit["beta_hat"]
+fit["se_beta"]
+fit["blup"]["v_hat"]
+```
+
+Beta fit:
+
+```python
 fit = stmm(
     data=df,
     model="m5_seblup_rao_yu_it",
     family="beta",
     W=W,
     method="Laplace",
-    area_col="Kabupaten",
-    time_col="Tahun",
+    area_col="area",
+    time_col="time",
     gpu="no",
 )
 
 print(fit.summary())
-beta = fit.beta_original          # skala asli
-se = fit.se_original              # galat baku, skala asli
+fit.beta_original   # fixed effects on the original predictor scale
+fit.se_original
 mu, se_mu = fit.ebp(n_draws=200, seed=0, return_se=True)
 ```
 
-Nama kolom dapat disesuaikan (`response_col`, `area_col`, `time_col`,
-`prov_col`, `kab_col`) sehingga data tidak perlu diganti nama. Preset akurasi
-`fast`, `balanced`, `medium`, dan `full` mengatur toleransi, batas iterasi, dan
-perhitungan Hessian.
+## Models
 
-## 6. Validasi
+| ID | Area effect | Time effect | Interaction |
+|---|---|---|---|
+| `m1_iid_iid` | IID | IID | none |
+| `m2_iid_ar1` | IID | AR(1) | none |
+| `m3_sar_iid` | SAR | IID | none |
+| `m4_sar_ar1` | SAR | AR(1) | none |
+| `m5_seblup_rao_yu_it` | SEBLUP Rao-Yu | AR(1) | none |
+| `m6_nested_iid_iid` | nested IID | IID | none |
+| `m7_nested_ar1` | nested SAR | AR(1) | none |
+| `m8_iid_iid_int` | IID | IID | IID |
+| `m9_sar_iid_int` | SAR | IID | spatial |
+| `m10_iid_ar1_int` | IID | AR(1) | temporal |
+| `m11_sar_ar1_int` | SAR | AR(1) | spatio-temporal |
+| `m12_seblup_rao_yu_it_int` | SEBLUP Rao-Yu | AR(1) | spatio-temporal |
+| `m13_nested_iid_iid_int` | nested IID | IID | temporal |
+| `m14_nested_ar1_int` | nested SAR | AR(1) | IID |
+| `beta_regression` | none | none | none |
 
-Verifikasi dilakukan pada lingkungan pengembangan internal. Rangkaian uji tidak
-disertakan dalam repositori ini, sehingga angka di bawah tidak dapat dijalankan
-ulang dari salinan publik.
+Models ending in `_int` add an interaction term between area and time effects.
+Models with SAR or SEBLUP area effects require `W`.
 
-- Invariansi: menyalakan atau mematikan `compute_posterior` tidak mengubah
-  `beta`, `logLik`, `b_hat`, maupun komponen varians (selisih eksak 0.0).
-- Kecocokan: EBLUP model `m5_seblup_rao_yu_it` dibandingkan dengan solusi
-  langsung persamaan campuran Henderson pada toleransi `1e-7`.
-- Regresi: rangkaian uji dijalankan penuh sebelum setiap hasil dipakai untuk
-  pelaporan.
+## Estimation and prediction
 
-Rincian API ringkas tersedia di `docs/API.md`.
+- Gaussian: `method="ML"` or `method="REML"`. The fit is returned as a dict
+  with `beta_hat`, `se_beta`, `log_lik`, `AIC`, `BIC`, and `blup`
+  (`v_hat`, `u_hat`, `se_v`).
+- Beta: `method="Laplace"`. The fit is an object with `summary()`,
+  `certificate`, `beta_original`, `se_original`, `ebp()`, and `ebp_newdata()`.
+- Fixed effects in the Beta family are standardised internally. Use
+  `beta_original` and `se_original` for reporting, not the standardised values.
+- `ebp_newdata()` predicts for held-out periods of areas seen during fitting.
+  Areas never seen during fitting are rejected.
+- Accuracy presets: `fast`, `balanced`, `medium`, `full`.
 
-## 7. Keterbatasan
+## Requirements
 
-- Jalur Gaussian belum portabel ke GPU; gunakan `gpu="no"`.
-- EBP belum disertai galat perkiraan kuadrat tengah.
-- Validasi silang blok hanya untuk efek tetap, bukan efek acak.
-- Model nested dengan interaksi berukuran padat dan lambat; naikkan `max_iter`.
-- `simulate_beta` belum membangkitkan efek interaksi, sehingga pemulihan
-  Monte Carlo untuk M8 dan seterusnya belum tersedia.
+- Python 3.10 or newer
+- NumPy 1.24+, SciPy 1.11+, pandas 2.0+
+- CuPy and PyTorch only for the `gpu` extra
 
-## 8. Sitasi
+## Documentation
+
+`docs/API.md` holds a compact API reference covering fitting, diagnostics, LRT,
+prediction intervals, and the thesis helper scripts.
+
+## Limitations
+
+- EBP here means `E[mu | y]`, computed from posterior draws. It is not the
+  Molina-Rao EBP, and its mean squared error is not implemented.
+- Spatial block cross-validation supports fixed effects only.
+- The Gaussian path is CPU only. Run it with `gpu="no"`.
+- Gaussian fits return a dict, Beta fits return an object. The two return types
+  are not unified yet.
+- Nested models with interactions are dense and slow. Raise `max_iter` for them.
+- `simulate_beta` does not generate interaction effects, so Monte Carlo
+  recovery for M8 and above is not available.
+
+## Citation
 
 ```bibtex
-@mastersthesis{ghiffary_stmmlib,
+@mastersthesis{ghiffahry_stmmlib,
   author = {Ghiffary, Ghardapaty},
-  title  = {<judul tesis>},
+  title  = {<thesis title>},
   school = {IPB University},
-  year   = {<tahun>},
-  note   = {Pustaka penelitian: \url{https://github.com/ghiffahry/STMMLib}}
+  year   = {<year>},
+  note   = {Software: \url{https://github.com/ghiffahry/STMMLib}}
 }
 ```
 
-Isi `<judul tesis>` dan `<tahun>` sebelum repositori dipublikasikan.
+## License
 
-## 9. Lisensi
-
-MIT. Lihat berkas `LICENSE`.
+MIT. See [LICENSE](LICENSE).
