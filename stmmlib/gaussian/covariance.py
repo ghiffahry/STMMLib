@@ -73,7 +73,7 @@ def build_G_area(
     """Build area-level covariance block G_area.
 
     Args:
-        area_type: "iid" or "sar".
+        area_type: "iid", "sar", or "seblup_rao_yu" (SAR area block).
         sigma2_v: Area variance.
         m: Number of areas.
         W: Spatial weight matrix (required for SAR).
@@ -88,7 +88,7 @@ def build_G_area(
     if area_type == "iid":
         return sigma2_v * xp.eye(m, dtype=xp.float64)
 
-    if area_type == "sar":
+    if area_type in ("sar", "seblup_rao_yu"):
         if W is None:
             raise ValueError("SAR model requires spatial weight matrix W.")
         if backend.is_sparse(W):

@@ -2,7 +2,7 @@
 
 Modules:
     structure: M1-M14 model registry, nraw_interaction
-    precision: AR(1) precision, SAR precision, block-diagonal assembly
+    precision: AR(1) precision, rho/phi bounds, effective phi
     design: Z matrices, contrast matrices, W_gamma
     solvers: Newton/BFGS mode solver, Laplace marginal likelihood engine
     inference: Hessian-based SEs, Wald tests, confidence intervals

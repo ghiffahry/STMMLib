@@ -36,6 +36,10 @@ import numpy as np
 from scipy.special import betaln
 
 
+class PrecisionShapeError(ValueError):
+    """Assembled Q does not match the design matrix Z."""
+
+
 def _as_opt(fit):
     return fit._opt if hasattr(fit, "_opt") else fit
 
@@ -155,12 +159,11 @@ def beta_criteria(fit, W=None):
             Q_full = Q_base
 
         q = Z.shape[1]
-        if Q_full.shape[0] < q:
-            pad = q - Q_full.shape[0]
-            Q_full = np.block([[Q_full, np.zeros((Q_full.shape[0], pad))],
-                               [np.zeros((pad, Q_full.shape[0])), np.eye(pad) * 1e-10]])
-        elif Q_full.shape[0] > q:
-            Q_full = Q_full[:q, :q]
+        if Q_full.shape[0] != q:
+            raise PrecisionShapeError(
+                f"Precision/design size mismatch: Q is {Q_full.shape[0]}x"
+                f"{Q_full.shape[1]} but Z has {q} columns."
+            )
 
         # Conditional mean from the fitted (beta, b_hat) -- never stored mu_hat
         mu = np.clip(1 / (1 + np.exp(-(X @ beta + Z @ bh))), 1e-10, 1 - 1e-10)
@@ -221,6 +224,8 @@ def beta_criteria(fit, W=None):
             "cR2_marginal": r2m, "cR2_conditional": r2c,
             "var_fixed": vf, "var_random_latent": vre, "var_resid_beta": vresid,
         }
+    except PrecisionShapeError:
+        raise
     except Exception:
         return None
 
