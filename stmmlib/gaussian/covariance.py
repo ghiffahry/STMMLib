@@ -167,14 +167,6 @@ def expand_it(m: int, G, backend: Backend):
 # ---------------------------------------------------------------------------
 
 
-def _build_ar1_corr(T: int, phi: float, backend: Backend):
-    """AR(1) correlation matrix (unit variance)."""
-    xp = backend.xp
-    t_idx = xp.arange(T, dtype=xp.float64)
-    diff = xp.abs(t_idx[:, None] - t_idx[None, :])
-    return phi**diff
-
-
 def build_G_interaction(
     interaction: str,
     sigma2_gamma: float,
@@ -237,8 +229,10 @@ def build_G_interaction(
         return sigma2_gamma * backend.sparse_kron(I_T, qa, format="csr")
 
     if itype == "temporal":
-        # qt = B_time' A(phi_gamma) B_time
-        Ar = _build_ar1_corr(T, phi_gamma, backend)
+        # qt = B_time' G_AR1 B_time with G_AR1 = (1/(1-phi^2)) R(phi),
+        # the same innovation-variance convention as the parent time block
+        # (G_ar1_core), not the unit-variance correlation R alone.
+        Ar = G_ar1_core(T, 1.0, phi_gamma, backend)
         if B_st is not None:
             B_time = B_st["B_time"]
         else:
@@ -251,7 +245,9 @@ def build_G_interaction(
         return sigma2_gamma * backend.sparse_kron(I_m, qt, format="csr")
 
     if itype == "st":
-        # Q_gamma = kron(qt, qa) where qt=AR1, qa=SAR
+        # G_gamma = G_space (x) G_time. Z_gamma = kron(B_area, B_time) is
+        # area-slow / time-fast, so the Kronecker order must be kron(qa, qt);
+        # kron(qt, qa) permutes the two contrast coordinates.
         if W is None:
             raise ValueError("ST interaction requires W.")
         if backend.is_sparse(W):
@@ -268,13 +264,13 @@ def build_G_interaction(
             B_area = _contr_sum(m, backend)
             B_time = _contr_sum(T, backend)
         qa = B_area.T @ AtA @ B_area
-        Ar = _build_ar1_corr(T, phi_gamma, backend)
+        Ar = G_ar1_core(T, 1.0, phi_gamma, backend)
         qt = B_time.T @ Ar @ B_time
         if not is_pd(qa, backend):
             qa = near_pd(qa, backend)
         if not is_pd(qt, backend):
             qt = near_pd(qt, backend)
-        Q_gamma = backend.sparse_kron(qt, qa, format="csr")
+        Q_gamma = backend.sparse_kron(qa, qt, format="csr")
         return sigma2_gamma * Q_gamma
 
     raise ValueError(f"Unknown interaction type: {itype!r}")

@@ -15,6 +15,10 @@ if TYPE_CHECKING:
     from stmmlib._backend import Backend
 
 
+class PrecisionShapeError(ValueError):
+    """Assembled precision Q does not match the design matrix Z."""
+
+
 def ar1_precision(n: int, log_sd: float, raw_phi: float, backend: Backend,
                   phi_bound: float = 0.95):
     """AR(1) innovation precision matrix (tridiagonal).
@@ -91,43 +95,4 @@ def effective_phi(raw_phi: float, phi_bound: float = 0.95) -> float:
     """
     u = phi_bound * np.tanh(raw_phi)
     return phi_bound * np.tanh(u)
-
-
-def interaction_shape(des: dict, s: dict, raw_gamma: float = 0.0, backend: Backend = None):
-    """Build unscaled interaction precision shape using Kronecker of contrasts.
-
-    Args:
-        des: Design dict with B_area, B_time.
-        s: Structure dict.
-        raw_gamma: Raw interaction dependence parameter.
-        backend: Array backend.
-
-    Returns:
-        Sparse precision shape matrix.
-    """
-    if backend is None:
-        from stmmlib._backend import Backend
-        backend = Backend(gpu=False)
-
-    xp = backend.xp
-    interaction = s.get("interaction", "none")
-    B_area = des.get("B_area")
-    B_time = des.get("B_time")
-
-    if interaction == "iid" or interaction == "none":
-        # Identity shape
-        n_gamma = B_area.shape[1] * B_time.shape[1] if B_area is not None and B_time is not None else 0
-        return xp.eye(n_gamma, dtype=xp.float64) if n_gamma > 0 else None
-
-    if interaction == "spatial":
-        return xp.eye(B_area.shape[1] * B_time.shape[1], dtype=xp.float64)
-
-    if interaction == "temporal":
-        return xp.eye(B_area.shape[1] * B_time.shape[1], dtype=xp.float64)
-
-    if interaction == "st":
-        return xp.eye(B_area.shape[1] * B_time.shape[1], dtype=xp.float64)
-
-    return None
-
 

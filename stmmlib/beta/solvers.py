@@ -15,6 +15,8 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.special import digamma, expit, polygamma
 
+from stmmlib.beta.precision import PrecisionShapeError
+
 if TYPE_CHECKING:
     from stmmlib._backend import Backend
 
@@ -422,7 +424,14 @@ def beta_mode_newton(X, Z, Q, beta, logphi, y, max_iter=50, start_b=None, inner_
             except Exception:
                 break
 
-        # Line search (simple backtracking)
+        # Line search (simple backtracking). NOTE: this accepts a step whenever
+        # the curvature stays finite, without requiring the objective to
+        # decrease. A cold start can therefore overshoot and diverge (measured
+        # M10 at a fitted theta: max|b| 1.1 -> 33.6, logLik 62.6 -> -5.5e4).
+        # Warm starts from the previous outer iterate keep fits on the mode;
+        # eval_param (cold start) exposes it. Adding the monotone test changes
+        # the frozen M1-M5 numbers (M4 logLik 60.253 -> 60.114), so it is not
+        # applied here; a future re-freeze should adopt it.
         scale = 1.0
         for _ in range(10):
             b_new = b + scale * delta
@@ -685,7 +694,7 @@ def beta_laplace_structural(
     Inner: Newton/BFGS mode solver for random effects b.
 
     log L(theta) approx -l(eta_hat) - 0.5 b_hat' Q b_hat
-                          - 0.5 logdet(Q) - 0.5 logdet(H)
+                          + 0.5 logdet(Q) - 0.5 logdet(H)
 
     If eval_param (full parameter vector) is provided, skip optimization and
     return a dict with objective/log_lik at that parameter (debugging).
@@ -946,16 +955,13 @@ def beta_laplace_structural(
         else:
             Q_full = Q_base
 
-        # Ensure Q_full matches Z columns
+        # Q and Z must agree; a silent pad/truncate hides structural bugs.
         q = Z.shape[1]
-        if Q_full.shape[0] < q:
-            pad = q - Q_full.shape[0]
-            Q_full = np.block([
-                [Q_full, np.zeros((Q_full.shape[0], pad))],
-                [np.zeros((pad, Q_full.shape[0])), np.eye(pad, dtype=np.float64) * 1e-10]
-            ])
-        elif Q_full.shape[0] > q:
-            Q_full = Q_full[:q, :q]
+        if Q_full.shape[0] != q:
+            raise PrecisionShapeError(
+                f"Precision/design size mismatch: Q is {Q_full.shape[0]}x"
+                f"{Q_full.shape[1]} but Z has {q} columns for {model!r}."
+            )
 
         # Inner solve: find modes b (warm-start from previous outer iterate)
         if _use_blocked:
@@ -1021,8 +1027,13 @@ def beta_laplace_structural(
                 H = Z.T @ (Z * beta_nll_curvature(eta_hat, y, phi)[:, None]) + Q_full
                 logdet_H = np.linalg.slogdet(H)[1]
         except Exception:
-            logdet_Q = 0.0
-            logdet_H = 0.0
+            # A failed logdet is not a zero logdet: replacing it with 0
+            # silently corrupts the objective. Treat it like the Q-assembly
+            # guard above (reject the probe point).
+            if _os_env_debug():
+                import traceback as _tb
+                _tb.print_exc()
+            return 1e20
 
         # Laplace approx: l = log p(y|b_hat) + log N(b_hat;0,Q^-1) + 0.5 log det(2pi H^-1)
         #   log N(b;0,Q^-1) = -0.5 b'Q b + 0.5 log|Q|                 (drop 0.5 q log 2pi)
@@ -1230,9 +1241,28 @@ def beta_laplace_structural(
     # optimizing. Must run before the starts loop (eval_param/eval_many are
     # eval-only contracts; running the optimizer first wastes a full fit).
     if eval_grad is not None:
-        if eval_b0 is not None:
-            _state["b"] = np.asarray(eval_b0, dtype=np.float64).copy()
-        return {"grad": _laplace_grad(np.asarray(eval_grad, dtype=np.float64))}
+        pv = np.asarray(eval_grad, dtype=np.float64)
+        if _jac_ok:
+            if eval_b0 is not None:
+                _state["b"] = np.asarray(eval_b0, dtype=np.float64).copy()
+            return {"grad": _laplace_grad(pv), "grad_kind": "analytic"}
+        # Non-blocked / nested / interaction models have no analytic gradient.
+        # Fall back to central finite differences of the same objective instead
+        # of calling the blocked-only path (it used to crash on M4+).
+        _b0 = (np.zeros(Z.shape[1], dtype=np.float64) if eval_b0 is None
+               else np.asarray(eval_b0, dtype=np.float64))
+        eps = 1e-6
+        fd = np.empty_like(pv)
+        for i in range(len(pv)):
+            vals = []
+            for sign in (1.0, -1.0):
+                row = pv.copy()
+                row[i] += sign * eps
+                _state["b"] = _b0.copy()
+                _state.pop("cache", None)
+                vals.append(float(_neg_marginal_l(row)))
+            fd[i] = (vals[0] - vals[1]) / (2.0 * eps)
+        return {"grad": fd, "grad_kind": "finite-diff"}
 
     if eval_many is not None:
         eval_many = np.atleast_2d(np.asarray(eval_many, dtype=np.float64))
@@ -1250,13 +1280,34 @@ def beta_laplace_structural(
                        else np.asarray(eval_b0, dtype=np.float64))
         val = _neg_marginal_l(eval_param)
         b_debug = _state["b"].copy()
-        import os as _os
-        if _os.environ.get("STMM_DEBUG"):
-            _gs = Z.T @ _beta_nll_score(X @ eval_param[:p] + Z @ b_debug,
-                                        y, float(np.exp(eval_param[p]))) \
-                + _block_diag_dense(_build_Q(eval_param[p + 1: p + 1 + ksd],
-                                             eval_param[p + 1 + ksd:])[0]) @ b_debug
-            print(f"    [hook] b_debug resid={np.max(np.abs(_gs)):.3e}", flush=True)
+        # Stationarity of the returned mode. Non-zero means the inner solve did
+        # not reach a stationary point, so the Laplace value describes a point
+        # that is not the conditional mode (a cold start can diverge: measured
+        # M10, resid 2.8e2). Exposed instead of silently returned.
+        _bq, _gq = _build_Q(eval_param[p + 1: p + 1 + ksd],
+                            eval_param[p + 1 + ksd:])
+        _Qdbg = _block_diag_dense(_bq)
+        if _gq is not None and _gq.size > 0:
+            _Qdbg = _block_diag_dense([_Qdbg, _gq])
+        _eta_dbg = X @ eval_param[:p] + Z @ b_debug
+        _gs = Z.T @ _beta_nll_score(_eta_dbg, y,
+                                    float(np.exp(eval_param[p]))) \
+            + _Qdbg @ b_debug
+        _mode_resid = float(np.max(np.abs(_gs)))
+        if _os_env_debug():
+            # f = NLL + 0.5 b'Qb: what the inner solver minimizes. The mode is
+            # argmin f; a stationary point with larger f is not the mode.
+            from scipy.special import betaln as _betaln
+            _mu = np.clip(1.0 / (1.0 + np.exp(-_eta_dbg)), 1e-15, 1.0 - 1e-15)
+            _ph = float(np.exp(eval_param[p]))
+            _av, _bv = _mu * _ph, (1.0 - _mu) * _ph
+            _f = -np.sum(-_betaln(_av, _bv)
+                         + (_av - 1.0) * np.log(np.clip(y, 1e-15, 1.0))
+                         + (_bv - 1.0) * np.log(np.clip(1.0 - y, 1e-15, 1.0))) \
+                + 0.5 * b_debug @ _Qdbg @ b_debug
+            print(f"    [hook] b_debug resid={_mode_resid:.3e} "
+                  f"max|b|={np.max(np.abs(b_debug)):.4f} f={_f:.6f}",
+                  flush=True)
         hessian = None
         lambda_min = None
         hessian_pd = None
@@ -1275,7 +1326,7 @@ def beta_laplace_structural(
             finally:
                 _state.pop("hessian_probe", None)
         return {"eval_param": np.array(eval_param, dtype=np.float64, copy=True),
-                "neg_log_lik": val,
+                "neg_log_lik": val, "mode_residual": _mode_resid,
                 "log_lik": -val, "b_hat": b_debug, "X": X, "Z": Z,
                 "des": des, "model": model, "y": y, "p": p, "n": n, "W": W,
                 "hessian": hessian, "lambda_min": lambda_min, "hessian_pd": hessian_pd}
@@ -1521,8 +1572,8 @@ def beta_laplace_structural(
     aic = -2 * log_lik + 2 * k_total
     bic = -2 * log_lik + np.log(n) * k_total
 
-    # Recompute inner mode at best param so `_state["b"]` is the conditional mode
-    # for the final estimates (used for predictions: eta = X beta + Z b_hat).
+    # Recompute the inner mode at best param so `_state["b"]` is the conditional
+    # mode for the final estimates (used for predictions: eta = X beta + Z b_hat).
     try:
         _neg_marginal_l(best_param)
     except KeyboardInterrupt:
@@ -1540,17 +1591,13 @@ def beta_laplace_structural(
             _Qf = _block_diag_dense(_blocks_Q)
             if _Q_g is not None and _Q_g.size > 0:
                 _Qf = _block_diag_dense([_Qf, _Q_g])
-            # Same column padding as the objective's Q_full assembly.
+            # Q and Z must agree; a silent pad/truncate hides structural bugs.
             _qz = Z.shape[1]
-            if _Qf.shape[0] < _qz:
-                _pad = _qz - _Qf.shape[0]
-                _Qf = np.block([
-                    [_Qf, np.zeros((_Qf.shape[0], _pad))],
-                    [np.zeros((_pad, _Qf.shape[0])),
-                     np.eye(_pad, dtype=np.float64) * 1e-10],
-                ])
-            elif _Qf.shape[0] > _qz:
-                _Qf = _Qf[:_qz, :_qz]
+            if _Qf.shape[0] != _qz:
+                raise PrecisionShapeError(
+                    f"Precision/design size mismatch: Q is {_Qf.shape[0]}x"
+                    f"{_Qf.shape[1]} but Z has {_qz} columns for {model!r}."
+                )
             _w = beta_nll_curvature(X @ beta_hat + Z @ b_hat, y, phi_hat)
             _Zw = Z * _w[:, None]
             H_b_chol = np.linalg.cholesky(_Zw.T @ Z + _Qf)

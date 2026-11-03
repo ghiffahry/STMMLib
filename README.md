@@ -143,8 +143,14 @@ prediction intervals, and the thesis helper scripts.
 - Gaussian fits return a dict, Beta fits return an object. The two return types
   are not unified yet.
 - Nested models with interactions are dense and slow. Raise `max_iter` for them.
-- `simulate_beta` does not generate interaction effects, so Monte Carlo
-  recovery for M8 and above is not available.
+- `simulate_beta` supports the flat models M1-M5 and the interaction models
+  M8-M12. Nested models M6/M7/M13/M14 raise `ValueError`.
+- `beta_criteria` (cAIC, conditional R2) returns NaN for nested models; their
+  province/district/cell precision builder is not implemented.
+- When the automatic prior refit is used, the reported `logLik`, `AIC`, and
+  `BIC` are the penalized objective. The fit's `optim` record
+  (`fit._opt["optim"]`) flags this with `penalty_auto` and reports the
+  unpenalized value at the same estimate in `penalty_refit_msg`.
 
 ## Citation
 

@@ -11,6 +11,8 @@ from __future__ import annotations
 import numpy as np
 from scipy.stats import norm
 
+from stmmlib.beta.precision import PrecisionShapeError
+
 
 def compute_stbl_inference(optim_results: dict, method: str = "numeric",
                            skip_hessian: bool = False) -> dict:
@@ -356,14 +358,11 @@ def _neg_loglik_for_hessian(param_vec: np.ndarray, optim_results: dict) -> float
                                [np.zeros((n_gamma, Q_base.shape[0])), Q_g]])
 
     q = Z.shape[1]
-    if Q_full.shape[0] < q:
-        pad = q - Q_full.shape[0]
-        Q_full = np.block([
-            [Q_full, np.zeros((Q_full.shape[0], pad))],
-            [np.zeros((pad, Q_full.shape[0])), np.eye(pad) * 1e-10]
-        ])
-    elif Q_full.shape[0] > q:
-        Q_full = Q_full[:q, :q]
+    if Q_full.shape[0] != q:
+        raise PrecisionShapeError(
+            f"Precision/design size mismatch: Q is {Q_full.shape[0]}x"
+            f"{Q_full.shape[1]} but Z has {q} columns for {model!r}."
+        )
 
     # Newton solve (blocked for area-specific non-interaction models, same as fit)
     from stmmlib.beta.solvers import beta_solve_mode, beta_solve_mode_blocked, laplace_block_logdets

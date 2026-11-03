@@ -49,10 +49,12 @@ def _gamma_re(interaction: str, m: int, T: int, sigma_gamma: float,
               rho_gamma: float, phi_gamma: float, W, rng) -> tuple:
     """Draw interaction coefficients gamma ~ N(0, G) for Types I-IV.
 
-    G built on the CONTRAST coordinates (same B as design._build_Z_gamma):
+    G built on the CONTRAST coordinates (same B as design._build_Z_gamma).
+    The AR(1) factor uses the innovation-variance convention of the fit
+    (G_AR1 = R(phi)/(1-phi^2)), matching beta_Q_gamma:
       iid:      kron(I_T, I_m1)
       spatial:  kron(I_T, B'A'AB),  A = I - rho_g W
-      temporal: kron(I_m, B'ArB),   Ar = AR(1) correlation
+      temporal: kron(I_m, B'ArB),   Ar = R(phi_g)/(1-phi_g^2)
       st:       kron(B'A'AB, B'ArB)
     Returns (gamma vector [n_gamma], Z_gamma matrix [n x n_gamma]).
     """
@@ -82,17 +84,20 @@ def _gamma_re(interaction: str, m: int, T: int, sigma_gamma: float,
     if interaction == "iid":
         L = np.eye(m1 * T)
     elif interaction in ("spatial", "st"):
+        if W is None:
+            raise ValueError(f"Interaction '{interaction}' needs a spatial "
+                             "weight matrix W.")
         W_arr = W.toarray() if hasattr(W, "toarray") else np.asarray(W, float)
         A = np.eye(m, dtype=np.float64) - rho_gamma * W_arr
         La = _chol(B_area.T @ (A.T @ A) @ B_area)
         if interaction == "spatial":
             L = np.kron(np.eye(T), La)
         else:
-            Ar = _ar1_corr(T, phi_gamma)
+            Ar = _ar1_corr(T, phi_gamma) / (1.0 - phi_gamma ** 2)
             Lt = _chol(B_time.T @ Ar @ B_time)
             L = np.kron(La, Lt)
     else:  # temporal
-        Ar = _ar1_corr(T, phi_gamma)
+        Ar = _ar1_corr(T, phi_gamma) / (1.0 - phi_gamma ** 2)
         Lt = _chol(B_time.T @ Ar @ B_time)
         L = np.kron(np.eye(m), Lt)
     gamma = sigma_gamma * (L @ rng.normal(0.0, 1.0, n_gamma))
@@ -100,7 +105,10 @@ def _gamma_re(interaction: str, m: int, T: int, sigma_gamma: float,
 
 
 def _ar1_corr(T: int, phi: float) -> np.ndarray:
-    """AR(1) correlation matrix (marginal, stationarity phi^|i-j|)."""
+    """AR(1) correlation matrix R_ij = phi^|i-j| (unit marginal variance).
+
+    Callers that need the innovation-variance convention divide by (1-phi^2).
+    """
     i, j = np.meshgrid(np.arange(T), np.arange(T), indexing="ij")
     return phi ** np.abs(i - j)
 
@@ -128,7 +136,7 @@ def simulate_beta(
     The random effects are drawn from the covariance Q^{-1} implied by the
     fitted structural model (see `solvers.beta_laplace_structural`), so the
     output can be used to check parameter recovery for each model. Interaction
-    models (M8-M12, M13/M14 flat/nested) draw gamma ~ N(0, G) on the contrast
+    models (M8-M12) draw gamma ~ N(0, G) on the contrast
     coordinates and add Z_gamma @ gamma to the linear predictor.
 
     Balances: n = m * T, ordered area-major (per area rows of T times),
@@ -145,10 +153,11 @@ def simulate_beta(
             INNOVATION SD sigma_eta (not the marginal SD).
         rho: SAR spatial parameter (M3/M4/M5).
         ar1_phi: AR(1) time parameter (M2/M4/M5).
-        sigma_gamma: Interaction random-effect SD (M8-M14; 0 disables).
+        sigma_gamma: Interaction random-effect SD (M8-M12; 0 disables).
         rho_gamma: Spatial dependence of the interaction (M9/M11/M12).
         phi_gamma: Temporal dependence of the interaction (M10/M11/M12).
-        model: Model ID (M1-M14 supported; nested requires W-like W=None ok).
+        model: Model ID. Flat models M1-M5 and interaction models M8-M12 are
+            supported; nested M6/M7/M13/M14 raise ValueError.
         W: Spatial weight matrix (m x m, required for SAR/seblup/spatial-int).
         seed: Random seed.
 
@@ -157,19 +166,28 @@ def simulate_beta(
         gamma and the true parameter values for recovery checks.
 
     Raises:
-        ValueError: if n != m*T, or W is missing for a spatial model.
+        ValueError: if n != m*T, if W is missing for a spatial model, or if
+            the model is nested (M6/M7/M13/M14).
     """
     s = stmm_beta_structure(model)
     area = s["area"]
     time = s["time"]
     time_scope = s["time_scope"]
 
+    if area in ("nested_iid", "nested_sar"):
+        raise ValueError(
+            f"simulate_beta does not support nested model {model!r}: it needs "
+            "separate province and district levels, which this generator "
+            "does not build.")
+
     if n != m * T:
         raise ValueError(f"Structural model '{model}' needs balanced data: n must equal m*T ({m}*{T}={m*T}), got n={n}.")
     if area in ("sar", "nested_sar", "seblup_rao_yu") and W is None:
         raise ValueError(f"Model '{model}' needs spatial weight matrix W.")
-    if time == "ar1" and W is None and area not in ("sar", "nested_sar", "seblup_rao_yu"):
-        raise ValueError(f"Model '{model}' needs AR(1) which requires W (identity fallback), got None.")
+    if time == "ar1" and abs(ar1_phi) >= 1.0:
+        raise ValueError(f"AR(1) coefficient must satisfy |ar1_phi| < 1, got {ar1_phi}.")
+    if s["interaction"] in ("temporal", "st") and abs(phi_gamma) >= 1.0:
+        raise ValueError(f"Interaction AR(1) coefficient must satisfy |phi_gamma| < 1, got {phi_gamma}.")
 
     rng = np.random.default_rng(seed)
 
@@ -218,7 +236,7 @@ def simulate_beta(
     z_dep = Z_time if Z_time is not None else Z_cell
     eta = X @ beta + Z_area.toarray() @ b_area + z_dep @ b_time
 
-    # Interaction (M8-M12, M13/M14): Z_gamma @ gamma with gamma ~ N(0, G)
+    # Interaction (M8-M12): Z_gamma @ gamma with gamma ~ N(0, G)
     gamma = np.zeros(0)
     Z_gamma = None
     if s["interaction"] != "none":

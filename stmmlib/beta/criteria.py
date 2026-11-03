@@ -35,9 +35,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.special import betaln
 
-
-class PrecisionShapeError(ValueError):
-    """Assembled Q does not match the design matrix Z."""
+from stmmlib.beta.precision import PrecisionShapeError
 
 
 def _as_opt(fit):
@@ -149,12 +147,22 @@ def beta_criteria(fit, W=None):
             Q_base = Q_base.toarray()
 
         n_gamma = len(blocks.get("interaction", []))
-        if n_gamma > 0 and len(logs) > 2:
-            # Working simplification (as in the validated notebook): diagonal
-            # gamma block; gamma dependence params not propagated here.
-            Q_g = np.exp(-2.0 * logs[2]) * np.eye(n_gamma)
-            Q_full = np.block([[Q_base, np.zeros((Q_base.shape[0], n_gamma))],
-                               [np.zeros((n_gamma, Q_base.shape[0])), Q_g]])
+        if n_gamma > 0:
+            # Same Q_g the fit uses (shared helper): the diagonal shortcut here
+            # was wrong whenever rho_gamma/phi_gamma were nonzero (M9-M12).
+            from stmmlib._backend import Backend
+            from stmmlib.beta.solvers import beta_Q_gamma
+            Q_g = beta_Q_gamma(
+                s, des, int(des.get("m", n_area)), int(des.get("T", n_time)),
+                n_gamma, logs, raw_dep, len(logs), len(raw_dep),
+                s["area"] in ("sar", "seblup_rao_yu"),
+                s["time"] == "ar1", Backend(gpu=False))
+            if Q_g is not None and Q_g.size > 0:
+                Q_full = np.block([
+                    [Q_base, np.zeros((Q_base.shape[0], n_gamma))],
+                    [np.zeros((n_gamma, Q_base.shape[0])), Q_g]])
+            else:
+                Q_full = Q_base
         else:
             Q_full = Q_base
 

@@ -226,7 +226,9 @@ class BetastmmResult:
             phi_t = effective_phi(float(raw[1 if s["area"] in ("sar", "seblup_rao_yu") else 0]),
                                   phi_bound=_pb) \
                 if (s["time"] == "ar1" and len(raw) > (1 if s["area"] in ("sar", "seblup_rao_yu") else 0)) else 0.0
-            s2t = float(np.exp(2 * logs[1])) if len(logs) > 1 else 0.0
+            is_nested = "prov" in blocks
+            _eta_i = 2 if (is_nested and s["time"] == "ar1") else 1
+            s2t = float(np.exp(2 * logs[_eta_i])) if len(logs) > _eta_i else 0.0
             s2g = float(np.exp(2 * logs[-1])) if (len(blocks.get("interaction", [])) and len(logs) >= 3) else 0.0
             cell_var = s2t / max(1 - phi_t ** 2, 1e-6) if s["time"] == "ar1" else s2t
             per_col = []
@@ -431,18 +433,34 @@ class BetastmmResult:
         return self.coef()
 
     def ranef(self) -> dict:
-        """Predicted random effects by level, split as area / cell."""
+        """Predicted random effects by level.
+
+        Flat models: ``area`` / ``area_time`` (or ``time``). Nested models:
+        ``prov`` / ``kab`` / ``cell``. Interaction models append the
+        contrast-scale ``interaction`` block.
+        """
         opt = self._opt
         b = opt.get("b_hat")
         if b is None:
             return {}
         des = opt.get("des", {})
         blocks = des.get("blocks", {})
-        na = len(blocks.get("area", []))
-        nc = len(blocks.get("area_time", blocks.get("time", [])))
-        out = {"area": None if na == 0 else self._rename_level(b[:na], des.get("area_labels"))}
-        if nc > 0:
-            out["area_time"] = b[na:na + nc] if len(b) >= na + nc else b[na:]
+        out = {}
+        if "prov" in blocks:
+            i = 0
+            for key in ("prov", "kab", "cell"):
+                n = len(blocks.get(key, []))
+                out[key] = b[i:i + n]
+                i += n
+        else:
+            na = len(blocks.get("area", []))
+            nc = len(blocks.get("area_time", blocks.get("time", [])))
+            out["area"] = None if na == 0 else self._rename_level(b[:na], des.get("area_labels"))
+            if nc > 0:
+                out["area_time"] = b[na:na + nc] if len(b) >= na + nc else b[na:]
+        ng = len(blocks.get("interaction", []))
+        if ng > 0 and len(b) >= ng:
+            out["interaction"] = b[-ng:]
         return out
 
     @staticmethod
@@ -527,6 +545,33 @@ class BetastmmResult:
         else:
             sig_t2 = np.exp(2.0 * logs[1]) if len(logs) > 1 else 1.0
             out["time"] = {"type": "IID", "sigma^2": float(sig_t2)}
+        n_gamma = len(blocks.get("interaction", []))
+        if n_gamma > 0:
+            itype = s.get("interaction", "none")
+            s2g = float(np.exp(2.0 * logs[-1])) if len(logs) >= 3 else 0.0
+            entry = {"type": itype, "sigma_gamma^2": s2g,
+                     "n_gamma": int(n_gamma)}
+            has_sar = s["area"] in ("sar", "seblup_rao_yu")
+            has_ar1 = s["time"] == "ar1"
+            rg_i = (1 if has_sar else 0) + (1 if has_ar1 else 0)
+            if itype in ("spatial", "st"):
+                rbv = des.get("rho_bound_g", 0.95)
+                entry["raw_rho_gamma (atanh)"] = (
+                    float(raw[rg_i]) if len(raw) > rg_i else 0.0)
+                entry["rho_gamma"] = (
+                    float(rbv * np.tanh(raw[rg_i])) if len(raw) > rg_i else 0.0)
+            if itype in ("temporal", "st"):
+                i = rg_i + (1 if itype in ("spatial", "st") else 0)
+                # phi_gamma uses a SINGLE squash in beta_Q_gamma (it passes
+                # arctanh(phi_g/pb) into ar1_precision to cancel the second
+                # squash), unlike the parent phi_T which is double-squashed.
+                _pbg = des.get("phi_bound", 0.95)
+                entry["raw_phi_gamma (atanh)"] = (
+                    float(raw[i]) if len(raw) > i else 0.0)
+                entry["phi_gamma"] = (
+                    float(_pbg * np.tanh(raw[i])) if len(raw) > i else 0.0)
+            out["interaction"] = entry
+
         out["precision (kappa = phi)"] = float(self.phi)
         return out
 
