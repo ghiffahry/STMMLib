@@ -20,14 +20,14 @@ fit = stmm(data=df, model="m4_sar_ar1", family="beta", W=W,
 ### BetastmmResult (beta)
 | Atribut/metode | Isi |
 |---|---|
-| `beta`, `phi`, `sigma_area`, `sigma_time`, `sigma_gamma` | estimasi |
-| `log_lik`, `AIC`, `BIC`, `k` | kriteria |
+| `beta`, `phi`, `sigma_time`, `sigma_gamma`, `VarCorr()` | estimasi |
+| `log_lik`, `logLik`, `AIC`, `BIC` | kriteria |
 | `convergence` (dict), `status` | konvergen \| max_iter \| invalid; `at_bound`, `degenerate` |
 | `inference` | est/se/z/p per param + `vcov`, `hessian_pd`, `lambda_min`, label |
 | `residuals("dunn_smyth" \| "response" \| "conditional" \| "marginal")` | residual |
 | `ranef()`, `coef()`, `predict(X_new)` | efek acak, koefisien, prediksi |
 | `predict_interval(level=0.95, include_obs=True)` | PI logit-delta (P5) |
-| `variance_decomp` / via notebook | R2_m, R2_c (\u00a75.9/5.10 note) |
+| `stmmlib.beta.criteria.beta_criteria(fit)` | cAIC, df_hat, cR2 marginal/conditional, komponen varian |
 
 ## Diagnostik (satu pintu)
 
@@ -61,24 +61,3 @@ nested_lrt_with_df(ll_full, ll_null, df=1)             # chi2_df biasa
 
 Aturan: varian diuji ke 0 → WAJIB `boundary_lrt` (naif chi2_1 konservatif,
 ambang benar D>2.706). Melepas struktur utuh (rho/phi interior) → `nested_lrt_with_df`.
-
-## Validasi silang R
-
-`script/tesis/crossval_r/run_crossval_r.py` — 5 kasus, 14/14 metrik (lme4
-REML identik 0.0000; glmmTMB ar1 identik 0.0000; beta family diff <=0.014).
-Detail: note \u00a714.15, \u00a714.21.
-
-## Skrip tesis (script/tesis/)
-
-| Skrip | Fungsi |
-|---|---|
-| `refit_fast.py` | refit M1-M5 paralel data asli -> fit_results/*.pkl |
-| `run_coverage_M5.py`, `run_coverage_variance.py` | G6 coverage (efek tetap / varian) |
-| `run_residual_diagnostics_M1_M5.py` | tabel P9 |
-| `run_random_effects_diagnostics_M1_M5.py` | tabel P10 |
-| `run_lrt_beta.py` | demo LRT batas 2 arah |
-| `smoke_stmm_m1_m14.py`, `smoke_beta_m8m12.py`, `smoke_beta_nested.py` | smoke 14 model |
-| `block_cv.py` | spatial block CV OOS |
-
-Dokumentasi metodologi lengkap (gate G1-G7, audit, bug history):
-`stmmlib/note/Kerangka_BetaGLMM_M1-M14_Referensi_Akademis.md` (\u00a714.1-14.23).

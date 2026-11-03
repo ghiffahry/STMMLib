@@ -132,7 +132,7 @@ Models with SAR or SEBLUP area effects require `W`.
 ## Documentation
 
 `docs/API.md` holds a compact API reference covering fitting, diagnostics, LRT,
-prediction intervals, and the thesis helper scripts.
+and prediction intervals.
 
 ## Limitations
 
@@ -155,12 +155,13 @@ prediction intervals, and the thesis helper scripts.
 ## Citation
 
 ```bibtex
-@mastersthesis{ghiffahry_stmmlib,
-  author = {Ghiffary, Ghardapaty},
-  title  = {<thesis title>},
-  school = {IPB University},
-  year   = {<year>},
-  note   = {Software: \url{https://github.com/ghiffahry/STMMLib}}
+@software{ghiffahry_stmmlib,
+  author  = {Ghiffary, Ghardapaty},
+  title   = {STMMLib: spatio-temporal mixed models for areal panel data},
+  year    = {2026},
+  version = {0.1.0},
+  url     = {https://github.com/ghiffahry/STMMLib},
+  license = {MIT}
 }
 ```
 
