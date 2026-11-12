@@ -29,18 +29,22 @@ depend on that dataset, and is published as a software reference.
 
 ## Installation
 
-The package is not on PyPI yet. Install from source:
-
 ```bash
-git clone https://github.com/ghiffahry/STMMLib.git
-cd STMMLib
-pip install -e .
+pip install stmmlib
 ```
 
 For the optional GPU backend:
 
 ```bash
-pip install -e ".[gpu]"
+pip install "stmmlib[gpu]"
+```
+
+Install from source instead:
+
+```bash
+git clone https://github.com/ghiffahry/STMMLib.git
+cd STMMLib
+pip install -e .
 ```
 
 Run the test suite:
@@ -165,7 +169,7 @@ and prediction intervals.
   author  = {Ghiffary, Ghardapaty},
   title   = {STMMLib: spatio-temporal mixed models for areal panel data},
   year    = {2026},
-  version = {0.1.0},
+  version = {0.2.0},
   url     = {https://github.com/ghiffahry/STMMLib},
   license = {MIT}
 }
