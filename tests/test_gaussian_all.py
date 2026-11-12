@@ -35,6 +35,17 @@ def test_gaussian_nested_4_fit(df_nested):
         assert r.get("converged", False), mid
 
 
+def test_gaussian_explicit_iteration_cap_is_respected(df_gauss):
+    """An explicit max_iter is a promise to the caller.
+
+    The fit must report not-converged instead of quietly running past the
+    cap: the convergence flag has to mean what it says.
+    """
+    r = fit_gauss(df_gauss, "m2_iid_ar1", None, max_iter=2)
+    assert r.get("converged", False) is False
+    assert np.isfinite(r["log_lik"])
+
+
 def test_gaussian_interaction_enters_likelihood(df_gauss, W_flat):
     """M8-M12 logLik must differ from flat counterparts, unless the fitted
     sigma2_gamma collapses to the lower bound (legitimate on noise data)."""

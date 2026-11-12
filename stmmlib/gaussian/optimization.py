@@ -81,7 +81,7 @@ def run_optimization(
     start: dict = None,
     method: str = "REML",
     n_starts: int = 3,
-    max_iter: int = 200,
+    max_iter: int = 500,
     corr_bound: float = CORR_BOUND_DEFAULT,
     verbose: bool = False,
     loglik_func=None,
@@ -195,7 +195,7 @@ def run_optimization(
 
 def fit_seblup5(
     y, X, prepared, interaction, area_type, backend: Backend,
-    method="REML", start=None, n_starts=3, max_iter=200,
+    method="REML", start=None, n_starts=3, max_iter=500,
     verbose=False, corr_bound=CORR_BOUND_DEFAULT,
 ):
     """Full optimization loop for SEBLUP5 model."""
@@ -268,7 +268,7 @@ def fit_seblup5(
 
 def nested_fit(
     y, X, prepared, interaction, backend: Backend,
-    method="REML", start=None, n_starts=3, max_iter=200, verbose=False,
+    method="REML", start=None, n_starts=3, max_iter=500, verbose=False,
 ):
     """Full optimization loop for nested IID+IID model."""
     from stmmlib.gaussian.gls import logLik_nested
@@ -315,7 +315,7 @@ def nested_fit(
 
 def nested_ar1_fit(
     y, X, prepared, interaction, backend: Backend,
-    method="REML", start=None, n_starts=3, max_iter=200, verbose=False,
+    method="REML", start=None, n_starts=3, max_iter=500, verbose=False,
 ):
     """Full optimization loop for nested IID+AR1 model."""
     from stmmlib.gaussian.gls import logLik_nested_ar1

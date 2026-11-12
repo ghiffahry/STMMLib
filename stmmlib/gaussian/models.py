@@ -78,7 +78,7 @@ def stmm_normal_core(
     method: str = "REML",
     start: dict = None,
     n_starts: int = 3,
-    max_iter: int = 200,
+    max_iter: int = 500,
     compute_blup_flag: bool = True,
     compute_se_theta: bool = True,
     verbose: bool = False,
@@ -250,7 +250,7 @@ def stmm_normal_core(
 
 
 def lmm_base(formula, data, area, time, interaction="none", method="REML",
-             start=None, n_starts=3, max_iter=200, compute_blup=True,
+             start=None, n_starts=3, max_iter=500, compute_blup=True,
              compute_se=True, verbose=False, backend=None):
     """IID + IID base model (M1)."""
     return stmm_normal_core(
@@ -262,7 +262,7 @@ def lmm_base(formula, data, area, time, interaction="none", method="REML",
 
 
 def rao_yu(formula, data, area, time, interaction="none", method="REML",
-           start=None, n_starts=3, max_iter=200, compute_blup=True,
+           start=None, n_starts=3, max_iter=500, compute_blup=True,
            compute_se=True, verbose=False, backend=None):
     """IID + AR(1) (Rao-Yu) model (M2)."""
     return stmm_normal_core(
@@ -274,7 +274,7 @@ def rao_yu(formula, data, area, time, interaction="none", method="REML",
 
 
 def sar_only(formula, data, area, time, W, interaction="none", method="REML",
-             start=None, n_starts=3, max_iter=200, compute_blup=True,
+             start=None, n_starts=3, max_iter=500, compute_blup=True,
              compute_se=True, verbose=False, backend=None):
     """SAR + IID model (M3)."""
     return stmm_normal_core(
@@ -286,7 +286,7 @@ def sar_only(formula, data, area, time, W, interaction="none", method="REML",
 
 
 def sar_ar1(formula, data, area, time, W, interaction="none", method="REML",
-            start=None, n_starts=3, max_iter=200, compute_blup=True,
+            start=None, n_starts=3, max_iter=500, compute_blup=True,
             compute_se=True, verbose=False, backend=None):
     """SAR + AR(1) (full ST) model (M4)."""
     return stmm_normal_core(
@@ -299,7 +299,7 @@ def sar_ar1(formula, data, area, time, W, interaction="none", method="REML",
 
 def seblup_rao_yu_it(
     formula, data, area, time, W, interaction="none", area_type="sar",
-    method="REML", start=None, n_starts=3, max_iter=200,
+    method="REML", start=None, n_starts=3, max_iter=500,
     compute_se=True, verbose=False, response_col="y", backend=None,
     time_scope="area_specific",
 ):
@@ -393,7 +393,7 @@ def seblup_rao_yu_it(
 
 def nested_iid_iid(
     formula, data, area, time, prov, kab, interaction="none", W=None,
-    method="REML", start=None, n_starts=3, max_iter=200,
+    method="REML", start=None, n_starts=3, max_iter=500,
     compute_blup=True, compute_se=True, verbose=False, response_col="y",
     backend=None, time_scope="area_specific",
 ):
@@ -462,7 +462,7 @@ def nested_iid_iid(
 
 def nested_iid_ar1(
     formula, data, area, time, prov, kab, interaction="none", W=None,
-    method="REML", start=None, n_starts=3, max_iter=200,
+    method="REML", start=None, n_starts=3, max_iter=500,
     compute_blup=True, compute_se=True, verbose=False, response_col="y",
     backend=None, time_scope="area_specific",
 ):

@@ -5,6 +5,14 @@ follow Semantic Versioning.
 
 ## [0.2.1] - 2026-11-12
 
+### Fixed
+
+- The Gaussian optimiser's default iteration cap went from 200 to 500. On
+  scipy 1.11 the AR(1) profile likelihood needs 223 iterations (scipy 1.18
+  needs 196), so the old default reported not-converged for a fit that does
+  converge. An explicit `max_iter` is still honoured exactly: the fit then
+  reports not-converged rather than running past the cap.
+
 ### Changed
 
 - Installation section now states that `pip install stmmlib` pulls NumPy,
