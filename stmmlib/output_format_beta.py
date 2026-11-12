@@ -90,8 +90,14 @@ def _effect_row(i, labels, est, se, tval, pval, bound_idx=None, _pd_ok=True) -> 
     )
 
 
-def format_beta(obj, width: int = 72) -> str:
-    """Format a `BetastmmResult` as an English statsmodels-style report."""
+def format_beta(obj, width: int = 72, strict: bool = False) -> str:
+    """Format a `BetastmmResult` as an English statsmodels-style report.
+
+    strict=True hides the Wald z, p and confidence interval of the fixed
+    effects when the convergence certificate says the fit is not
+    inference-grade (boundary or large gradient). The default keeps the
+    numbers and prints the certificate warning instead.
+    """
     opt = obj._opt
     inf = obj._inf
     p = int(opt.get("p", 0))
@@ -103,8 +109,14 @@ def format_beta(obj, width: int = 72) -> str:
     labels = list(inf.get("param_labels", []) or [])
     est = np.asarray(inf.get("estimate", []), dtype=float)
     se = np.asarray(inf.get("se", []), dtype=float)
-    tval = np.asarray(inf.get("tvalue", []), dtype=float)
+    # The reported statistic follows the requested test: Wald z, or the
+    # signed sqrt(D) of the likelihood ratio test. Structural parameters are
+    # always Wald.
+    test_kind = inf.get("test", "wald_z")
+    tval = np.asarray(inf.get("statistic", inf.get("tvalue", [])), dtype=float)
     pval = np.asarray(inf.get("pvalue", []), dtype=float)
+    stat_hdr = "stat" if test_kind == "lrt" else "z"
+    p_hdr = "p" if test_kind == "lrt" else "P>|z|"
     bound_idx = _bound_rows(opt, labels)
 
     ln = []
@@ -120,17 +132,57 @@ def format_beta(obj, width: int = 72) -> str:
     _pd_ok = ((opt.get("certificate") or {}).get("hessian_pd") is True)
     if not _pd_ok:
         ln.append("SE tidak didukung sertifikat Hessian PD; dilarang dikutip untuk inferensi")
+
+    # Convergence certificate. valid=False means the point is not
+    # inference-grade (boundary or gradient too large); the report must say so
+    # instead of printing a clean table.
+    _cert = opt.get("certificate") or {}
+    _valid = _cert.get("valid")
+    if _valid is False:
+        _why = []
+        _bounds = list(_cert.get("bound_params") or [])
+        if _cert.get("at_bound") and _bounds:
+            _why.append("batas: " + ", ".join(str(b) for b in _bounds))
+        _grad = _cert.get("grad_norm")
+        if _grad is not None and np.isfinite(float(_grad)):
+            _why.append(f"|grad|={float(_grad):.3e}")
+        _pg = _cert.get("projected_grad")
+        if _pg is not None and np.isfinite(float(_pg)):
+            _why.append(f"|grad_proj|={float(_pg):.3e}")
+        ln.append("SERTIFIKAT: inferensi TIDAK valid (valid=False"
+                  + ("; " + "; ".join(_why) if _why else "")
+                  + "). z/p/CI tidak boleh dikutip tanpa uji batas "
+                    "(LRT mixture atau bootstrap).")
+    if strict and _valid is False:
+        se = np.array(se, dtype=float, copy=True)
+        pval = np.array(pval, dtype=float, copy=True)
+        tval = np.array(tval, dtype=float, copy=True)
+        se[:p] = np.nan
+        if test_kind != "lrt":
+            # In Wald mode the statistic and the p-value are the Wald ones,
+            # so they go too. In LRT mode they are the likelihood ratio
+            # result the caller asked for; only the Wald interval is hidden.
+            pval[:p] = np.nan
+            tval[:p] = np.nan
     ln.append("")
 
     # Fixed effects (Jalan B: always show SE/z/p/CI; non-PD honesty via banner)
     ln.append("Fixed Effects:")
-    ln.append(f"  {'':<2}{'':<24}{'coef':>11}{'std err':>11}{'z':>9}"
-              f"{'P>|z|':>11}{'':>6}")
+    ln.append(f"  {'':<2}{'':<24}{'coef':>11}{'std err':>11}{stat_hdr:>9}"
+              f"{p_hdr:>11}{'':>6}")
     nfe = min(len(labels), p)
     for i in range(nfe):
         ln.append(_effect_row(i, labels, est, se, tval, pval, bound_idx, _pd_ok))
+    ln.append("Koefisien pada skala baku (1 SD prediktor); "
+              "gunakan beta_original untuk satuan asli.")
     ln.extend(_footer(width))
-    ln.append("Uji Wald acuan N(0,1); baris NA = parameter di boundary, tidak diinterpretasikan; efek-waktu 11 level lemah struktural.")
+    if test_kind == "lrt":
+        ln.append("Uji LRT: D = 2(ll_full - ll_red), df = 1, acuan chi2_1; "
+                  "p Wald disimpan terpisah pada pvalue_wald; interval "
+                  "confidence tetap berbasis Wald.")
+    else:
+        ln.append("Uji Wald acuan N(0,1); baris NA = parameter di boundary, "
+                  f"tidak diinterpretasikan; efek-waktu {_fmt(Tt, 0)} level.")
 
     # Random-effects / variance parameters (params beyond the p fixed coefs)
     if len(labels) > nfe:

@@ -1,6 +1,6 @@
 """Boundary diagnosis for AR/precision parameters (pure decision logic).
 
-Maps the manual decision tree in note/PENANGANAN_BOUNDARY_AR_PHI.md into a
+Maps the manual decision tree in docs/notes/PENANGANAN_BOUNDARY_AR_PHI.md into a
 pure function: no fitting, no simulation, no data access. It only classifies
 evidence the caller already collected (seed endpoints, bound sensitivity,
 gradient, panel length T).

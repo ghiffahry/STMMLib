@@ -10,7 +10,7 @@ One entry point per family, returning a plain dict of formal tests:
       (beta only; gaussian result dicts do not carry X)
     - residual-vs-predictor structure: Spearman per predictor column
 
-All tests are designed to be reported directly in a thesis diagnostic table.
+All tests are designed to be reported directly in a diagnostic table.
 """
 from __future__ import annotations
 
@@ -337,25 +337,65 @@ def nested_lrt_with_df(loglik_full: float, loglik_null: float, df: int) -> dict:
                         else "tidak signifikan")}
 
 
-def wald_table_beta(fit) -> "list[dict]":
-    """P11: tidy Wald table (estimate, SE, z, p) from the inference block.
+def wald_table_beta(fit, method=None) -> "list[dict]":
+    """P11: tidy fixed-effect table (estimate, SE, z, p) from the inference block.
 
     Estimates are on the FITTED scale (standardized predictors for beta);
     use fit.coef() for original-scale coefficients.
+
+    method:
+        None (default) follows the fit: "lrt" when the model was fitted with
+        inference="lrt", otherwise Wald. "wald" forces the Wald columns,
+        "lrt" the likelihood ratio columns and raises ValueError when the
+        fit carries no LRT block.
+
+    Every row reports which test produced its p-value in "test": "lrt" for
+    a fixed effect that was tested by likelihood ratio, "wald_z" otherwise.
+    "p_value_wald" always holds the Wald p-value.
     """
     inf = getattr(fit, "inference", None) or {}
     est = np.asarray(inf.get("estimate", []), float)
     se = np.asarray(inf.get("se", []), float)
-    pv = np.asarray(inf.get("pvalue", []), float)
+    pv_wald = np.asarray(inf.get("pvalue_wald", inf.get("pvalue", [])), float)
+    stat = np.asarray(inf.get("statistic", inf.get("tvalue", [])), float)
     labels = list(inf.get("param_labels", []))
+    opt = getattr(fit, "_opt", {}) or {}
+    p_fixed = int(opt.get("p", len(labels)))
+    x_cols = list((opt.get("des") or {}).get("x_cols", []) or [])
+    lrt = getattr(fit, "lrt", None)
+    lrt_terms = (lrt or {}).get("terms", {}) or {}
+
+    if method is None:
+        method = "lrt" if lrt is not None else "wald"
+    if method not in ("wald", "lrt"):
+        raise ValueError(f"method must be 'wald' or 'lrt', got {method!r}.")
+    if method == "lrt" and lrt is None:
+        raise ValueError("this fit carries no LRT block; refit with "
+                         "inference='lrt' to get likelihood ratio p-values.")
+
     rows = []
     for i, lab in enumerate(labels):
         if i >= len(est):
             break
+        term = x_cols[i - 1] if 1 <= i <= p_fixed - 1 else None
+        lrow = lrt_terms.get(term) if term else None
+        tested = lrow is not None and lrow.get("status") == "ok" \
+            and lrow.get("p") is not None
+        z = float(est[i] / se[i]) if i < len(se) and se[i] > 0 else np.nan
+        if method == "lrt" and tested:
+            p_val = float(lrow["p"])
+            statistic = float(stat[i]) if i < len(stat) else np.nan
+            test = "lrt"
+        else:
+            p_val = float(pv_wald[i]) if i < len(pv_wald) else np.nan
+            statistic = z
+            test = "wald_z"
         rows.append({"param": lab, "estimate": float(est[i]),
                      "se": float(se[i]) if i < len(se) else np.nan,
-                     "z": float(est[i] / se[i]) if i < len(se) and se[i] > 0 else np.nan,
-                     "p_value": float(pv[i]) if i < len(pv) else np.nan})
+                     "z": z, "statistic": statistic,
+                     "p_value": p_val,
+                     "p_value_wald": float(pv_wald[i]) if i < len(pv_wald) else np.nan,
+                     "test": test})
     return rows
 
 
@@ -596,7 +636,7 @@ def format_random_effects_report(d: dict) -> str:
 
 
 def format_residual_report(d: dict) -> str:
-    """Compact text report for thesis notebooks/logs."""
+    """Compact text report for notebooks/logs."""
     L = []
     L.append(f"Residual diagnostics ({d['family']})")
     n = d["normality"]

@@ -1,7 +1,7 @@
 """Conditional selection criteria for Beta STMM: cAIC + conditional R2.
 
 Single source of truth for the `beta_criteria` helper previously inlined
-in the thesis notebooks (5 copies). Import it instead of copying::
+in research notebooks. Import it instead of copying::
 
     from stmmlib.beta.criteria import beta_criteria
 
@@ -15,7 +15,7 @@ Formulas (validated):
 
 Fixes vs the old notebook copy:
     - beta log-density SUBTRACTS ln B(a,b) (the old copy added it, which
-      produced M1 cAIC = +4.8jt instead of ~-11.1k).
+      produced a cAIC off by 4.8e6 from the correct value).
     - mu is always recomputed from the fitted (beta, b_hat); a stored
       mu_hat is never trusted.
     - area SAR uses des["rho_bound"] (spectral bound), not the gamma bound.
@@ -201,9 +201,10 @@ def beta_criteria(fit, W=None):
                                betaln(a, b)))
         # ll guard (loose heuristic): far below the Laplace marginal means
         # stale inputs -- refuse garbage instead of printing it. Threshold
-        # max(10, 1%|ll|): tight enough to catch miscalibrated mu (measured
-        # stale M1 case: ll_cond 16.5 vs ll 47.9 -> gap 31), loose enough for
-        # Laplace-vs-mode wiggle on heavy-shrink fits.
+        # max(10, 1%|ll|): tight enough to catch a miscalibrated mu, loose
+        # enough for Laplace-vs-mode wiggle on heavy-shrink fits. The
+        # absolute floor exists because at small |ll| a purely relative
+        # test has no power; it is a deliberate slack, not a measurement.
         ll_marg = float(opt.get("log_lik", np.nan))
         if (not np.isfinite(ll_cond) or not np.isfinite(df_hat)
                 or (np.isfinite(ll_marg)

@@ -427,10 +427,10 @@ def beta_mode_newton(X, Z, Q, beta, logphi, y, max_iter=50, start_b=None, inner_
         # Line search (simple backtracking). NOTE: this accepts a step whenever
         # the curvature stays finite, without requiring the objective to
         # decrease. A cold start can therefore overshoot and diverge (measured
-        # M10 at a fitted theta: max|b| 1.1 -> 33.6, logLik 62.6 -> -5.5e4).
+        # a cold start can jump the inner modes and diverge).
         # Warm starts from the previous outer iterate keep fits on the mode;
         # eval_param (cold start) exposes it. Adding the monotone test changes
-        # the frozen M1-M5 numbers (M4 logLik 60.253 -> 60.114), so it is not
+        # the frozen published numbers, so it is not
         # applied here; a future re-freeze should adopt it.
         scale = 1.0
         for _ in range(10):
@@ -679,11 +679,27 @@ def laplace_block_logdets(Z, w, Q, m, T):
     return logdet_H_block, logdet_Q
 
 
+def beta_parameter_bounds(cfg, p: int, ksd: int, q: int):
+    """The box bounds of the parameter vector [beta, logphi, logs, raw_dep].
+
+    One source of truth: the solver and the LRT refinement both take their
+    bounds from here, so the two cannot drift apart. The LRT refinement has
+    to clip to the same box the fit was estimated in, otherwise the
+    restricted maximum is taken outside the model.
+    """
+    bounds = [tuple(cfg.beta_bounds)] * p
+    bounds.append(tuple(cfg.logphi_bounds))
+    bounds.extend([tuple(cfg.logs_bounds)] * ksd)
+    bounds.extend([(-np.arctanh(cfg.dep_margin),
+                    np.arctanh(cfg.dep_margin))] * q)
+    return bounds
+
+
 def beta_laplace_structural(
     formula, data, y, method, model, W,
     n_starts=3, max_iter=200, inner_max_iter=50,
     inner_tol=1e-6, backend: Backend = None, eval_param=None, use_gpu=False,
-    start_theta=None, seed=None, compute_hessian=True, hess_eps=1e-4,
+    start_theta=None, start_b=None, seed=None, compute_hessian=True, hess_eps=1e-4,
     eval_many=None, eval_b0=None, verbose=0, eval_grad=None,
     use_analytic_jac=True, ftol=1e-12, gtol=1e-6, config=None,
     compute_posterior=False,
@@ -712,6 +728,9 @@ def beta_laplace_structural(
         inner_tol: Inner convergence tolerance.
         backend: Array backend.
         eval_param: Optional fixed parameter vector (evaluate only, no fit).
+        start_b: Optional warm start for the inner mode solve. Without it the
+            inner solve always starts from b = 0, which diverges on large
+            panels; a restricted refit reuses the mode of the full fit.
 
     Returns:
         dict with estimates, SEs, logLik, AIC, BIC, convergence info.
@@ -750,7 +769,7 @@ def beta_laplace_structural(
 
     # Build design
     from stmmlib.beta.design import stmm_beta_make_design
-    des = stmm_beta_make_design(data, model, W, backend, phi_bound=cfg.phi_bound)
+    des = stmm_beta_make_design(data, model, W, backend, rho_bound=cfg.rho_bound)
     Z = des["Z"]
     blocks = des["blocks"]
     n = des["n"]
@@ -759,8 +778,7 @@ def beta_laplace_structural(
 
     # Fixed-effects design X
     # Exclude grouping cols (area/time/prov/kab + internal .stmm_*) and y.
-    skip_x = {".stmm_area", ".stmm_time", ".stmm_prov", ".stmm_kab",
-              "y", "area", "time", "prov", "kab"}
+    skip_x = {".stmm_area", ".stmm_time", ".stmm_prov", ".stmm_kab", "y"}
     x_cols = [c for c in data.columns if c not in skip_x]
     if x_cols:
         X = np.column_stack([np.ones(n)] + [data[c].values.astype(np.float64) for c in x_cols])
@@ -807,9 +825,9 @@ def beta_laplace_structural(
     n_cell = len(blocks.get("cell", []))
 
     from stmmlib.beta.precision import rho_bound as _rho_bound, ar1_precision
-    rb = _rho_bound(W, backend, margin=cfg.phi_bound) if W is not None else cfg.phi_bound
+    rb = _rho_bound(W, backend, margin=cfg.rho_bound) if W is not None else cfg.rho_bound
     des["rho_bound"] = rb  # actual SAR spectral bound, for display (VarCorr)
-    des["phi_bound"] = cfg.phi_bound
+    des["phi_bound"] = cfg.phi_bound  # AR(1) coefficient bound
 
     # Position of sar rho (index 0 when present) and ar1 phi (after rho)
     # seblup_rao_yu = SAR area (rho) + per-area AR(1) time; treat as "sar" for rho.
@@ -919,11 +937,12 @@ def beta_laplace_structural(
     _jac_ok = bool(use_analytic_jac and (not use_gpu) and (not is_nested)
                    and _use_blocked)
 
-    # STABILITY GATE (measured): on real-scale panels the analytic-jac path
+    # STABILITY GATE: on real-scale panels the analytic-jac path
     # MUST use a truncated inner solve (<=15 iters). A full inner_max_iter=50
     # solve jumps inner modes at/near the outer start (it=1 false convergence,
     # F garbage), while inner=15 stays on a smooth warm-started landscape and
-    # climbs (M1 real: nit=3, ll 3741 and rising vs it=1, ll=-29). Truncation
+    # climbs (few iterations, ll rising) instead of it=1 with a huge negative
+    # ll. Truncation
     # is a stabilizer, not a shortcut: the gradient's own deep solve
     # (max(200, inner*4), tol 1e-8 below) is untouched. FD-jac/GPU/nested
     # paths keep their inner budget (baseline GPU runs healthy with 50).
@@ -1064,14 +1083,11 @@ def beta_laplace_structural(
     param_dim = p + 1 + ksd + q_dep
 
     # Bounds
-    bounds = [tuple(cfg.beta_bounds)] * p  # beta
-    bounds.append(tuple(cfg.logphi_bounds))  # logphi
     # log_sigma upper cap (3 -> sigma < e^3 ~ 20, logit scale). Large sigma
     # collapses Q toward 0 (weak penalty), letting the inner mode wander and
     # the Laplace marginal fall into a degenerate well (huge negative logLik +
     # slow inner solve). Capping keeps the objective stable across models.
-    bounds.extend([tuple(cfg.logs_bounds)] * ksd)  # logs
-    bounds.extend([(-np.arctanh(cfg.dep_margin), np.arctanh(cfg.dep_margin))] * q_dep)  # raw dep
+    bounds = beta_parameter_bounds(cfg, p, ksd, q_dep)
 
     # Starting values (match R: logit-scale OLS for beta, log sds on logit scale)
     def _get_start():
@@ -1282,8 +1298,8 @@ def beta_laplace_structural(
         b_debug = _state["b"].copy()
         # Stationarity of the returned mode. Non-zero means the inner solve did
         # not reach a stationary point, so the Laplace value describes a point
-        # that is not the conditional mode (a cold start can diverge: measured
-        # M10, resid 2.8e2). Exposed instead of silently returned.
+        # that is not the conditional mode (a cold start can diverge and
+        # leave a large residual). Exposed instead of silently returned.
         _bq, _gq = _build_Q(eval_param[p + 1: p + 1 + ksd],
                             eval_param[p + 1 + ksd:])
         _Qdbg = _block_diag_dense(_bq)
@@ -1364,11 +1380,18 @@ def beta_laplace_structural(
                 failed_starts.append(f"start {i} ditolak: non-finite")
                 continue
             _state["b"] = np.zeros(Z.shape[1], dtype=np.float64)
+            if start_b is not None:
+                _b0 = np.asarray(start_b, dtype=np.float64).ravel()
+                if _b0.size != Z.shape[1]:
+                    raise ValueError(
+                        f"start_b has {_b0.size} entries but the model has "
+                        f"{Z.shape[1]} random-effect modes.")
+                _state["b"] = _b0.copy()
             _state.pop("cache", None)
             try:
                 v0 = _neg_marginal_l(param0)
             except Exception as e:  # noqa: BLE001
-                failed_starts.append(f"start {i} ditolak: {e}")
+                failed_starts.append(f"start {i} ditolak: {type(e).__name__}: {e}")
                 continue
             if not np.isfinite(v0) or v0 >= 1e19:
                 failed_starts.append(f"start {i} ditolak: objective non-finite ({v0})")
@@ -1397,6 +1420,13 @@ def beta_laplace_structural(
                     f"start {i} ditolak: grad start non-finite/ledak ({_gn_pre:.3e})")
                 continue
             _state["b"] = np.zeros(Z.shape[1], dtype=np.float64)
+            if start_b is not None:
+                _b0 = np.asarray(start_b, dtype=np.float64).ravel()
+                if _b0.size != Z.shape[1]:
+                    raise ValueError(
+                        f"start_b has {_b0.size} entries but the model has "
+                        f"{Z.shape[1]} random-effect modes.")
+                _state["b"] = _b0.copy()
             _state.pop("cache", None)
             try:
                 # maxfun guards total F,G evals (default 15000). Stiff log-scale
@@ -1468,7 +1498,7 @@ def beta_laplace_structural(
                 _interrupted = True
                 break
             except Exception as e:  # noqa: BLE001
-                failed_starts.append(f"start {i} gagal: {e}")
+                failed_starts.append(f"start {i} gagal: {type(e).__name__}: {e}")
                 continue
     except KeyboardInterrupt:
         print("interrupted: start dihentikan user, pakai titik terbaik sejauh ini")
@@ -1624,7 +1654,7 @@ def beta_laplace_structural(
     # reported success with a gradient within 2 orders of GRAD_TOL (trust-but-
     # verify). scipy's success=True alone is NOT enough: a failed line search
     # at the start reports "CONVERGENCE: RELATIVE REDUCTION OF F" with
-    # success=True and grad ~1e3-1e5 (measured M1/M2: it=1, grad 3745/2.1e5).
+    # success=True and grad can still be large (measured: it=1).
     # Otherwise it is honestly `max_iter` (never forced to "converged").
     # `degenerate` is a separate, non-equivalent signal -- `not degenerate`
     # is NOT convergence.
@@ -1905,8 +1935,7 @@ def beta_regression_base(formula, data, y, method="ML", model="beta_regression")
     applied here (plain ML regression path).
     """
     n = len(y)
-    _skip = {".stmm_area", ".stmm_time", ".stmm_prov", ".stmm_kab",
-             "y", "area", "time", "prov", "kab"}
+    _skip = {".stmm_area", ".stmm_time", ".stmm_prov", ".stmm_kab", "y"}
     x_cols = [c for c in getattr(data, "columns", []) if c not in _skip]
     if x_cols:
         X = np.column_stack(

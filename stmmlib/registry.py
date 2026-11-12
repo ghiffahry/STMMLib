@@ -198,6 +198,10 @@ MODELS: dict[str, ModelSpec] = {
 def stmm_available_models(family: str = "normal") -> list[str]:
     """Return list of available model IDs for a given family.
 
+    A model belongs to a family when it has at least one parameter in that
+    family: `beta_regression` has no random effects, so it is a Beta-only
+    model.
+
     Args:
         family: "normal" or "beta".
 
@@ -207,7 +211,7 @@ def stmm_available_models(family: str = "normal") -> list[str]:
     if family == "normal":
         return [mid for mid, s in MODELS.items() if s.n_params_normal > 0]
     if family == "beta":
-        return list(MODELS.keys())
+        return [mid for mid, s in MODELS.items() if s.n_params_beta > 0]
     raise ValueError(f"Unknown family: {family!r}. Use 'normal' or 'beta'.")
 
 
@@ -253,7 +257,7 @@ def get_model_spec(model_id: str) -> ModelSpec:
 # ---------------------------------------------------------------------------
 
 def stmm_model_equation(model_id: str, family: str = "beta") -> str:
-    """Equation string for one model (thesis-ready, link-scale form).
+    """Equation string for one model (link-scale form).
 
     Beta family: logit(mu_it) = x_it' beta + <random effects>,
         y_it ~ Beta(mu_it * phi, (1 - mu_it) * phi).

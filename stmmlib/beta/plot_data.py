@@ -1,6 +1,6 @@
 """Plot-ready data helpers for Beta mixed models (no matplotlib).
 
-Pure extractors for the thesis figures: each function returns a DataFrame,
+Pure extractors for figures: each function returns a DataFrame,
 ndarray, or dict that a plotting layer consumes directly. All accessors are
 defensive: a missing block/field or a boundary/degenerate fit yields
 empty/NaN output instead of an exception.

@@ -30,6 +30,9 @@ def stmm(
     prov_col: str | None = "prov",
     kab_col: str | None = "kab",
     config=None,
+    inference: str = "wald",
+    lrt_terms: "list | None" = None,
+    lrt_deadline_s: "float | None" = None,
     **kwargs,
 ):
     """Fit a spatio-temporal mixed model (Gaussian or Beta).
@@ -56,7 +59,7 @@ def stmm(
             balanced/medium-tol: ftol=1e-8, gtol=1e-6, Hessian on, max_iter
             cap 500 (cheap outer + honest SEs). medium/standard:
             ftol=1e-8, gtol=1e-6, no Hessian, no cap. full/high: ftol=1e-12,
-            gtol=1e-6, Hessian on (thesis numbers: SEs + PD certificate).
+            gtol=1e-6, Hessian on (SEs + PD certificate).
             Anchors: L-BFGS-B factr scale (Zhu-Byrd-Nocedal 1997);
             lme4 FtolAbs default 1e-5 and strict_tol ftol_abs=1e-8
             (Bates et al.).
@@ -82,16 +85,32 @@ def stmm(
         StMMResult (Gaussian) or BetastmmResult (Beta).
     """
     if family.lower() == "beta":
+        from stmmlib.registry import MODELS
+        spec = MODELS.get(model)
+        if spec is not None and spec.n_params_beta == 0:
+            raise ValueError(
+                f"model {model!r} is not available for family='beta' "
+                f"(it has no Beta structure).")
         return stmm_beta(formula, data, model, W, method="Laplace", gpu=gpu,
                          n_starts=n_starts, preset=preset,
                          response_col=response_col,
                          area_col=area_col, time_col=time_col,
-                         prov_col=prov_col, kab_col=kab_col, config=config, **kwargs)
+                         prov_col=prov_col, kab_col=kab_col, config=config,
+                         inference=inference, lrt_terms=lrt_terms,
+                         lrt_deadline_s=lrt_deadline_s, **kwargs)
     else:
+        from stmmlib.registry import MODELS
+        spec = MODELS.get(model)
+        if spec is not None and spec.n_params_normal == 0:
+            raise ValueError(
+                f"model {model!r} is not available for family='gaussian' "
+                f"(it has no Gaussian structure); use family='beta'.")
         return stmm_normal(formula, data, model, W, method=method, gpu=gpu,
                            n_starts=n_starts, response_col=response_col,
                            area_col=area_col, time_col=time_col,
-                           prov_col=prov_col, kab_col=kab_col, **kwargs)
+                           prov_col=prov_col, kab_col=kab_col,
+                           inference=inference, lrt_terms=lrt_terms,
+                           lrt_deadline_s=lrt_deadline_s, **kwargs)
 
 
 def stmm_normal(
@@ -110,6 +129,9 @@ def stmm_normal(
     spatial: str = None,
     temporal: str = None,
     interaction: str = None,
+    inference: str = "wald",
+    lrt_terms: "list | None" = None,
+    lrt_deadline_s: "float | None" = None,
     **kwargs,
 ):
     """Fit a Gaussian spatio-temporal mixed model.
@@ -129,39 +151,70 @@ def stmm_normal(
 
     spec = MODELS.get(model)
     if spec is not None:
+        _spatial_from_spec = spatial is None
+        _temporal_from_spec = temporal is None
         if spatial is None:
             spatial = spec.area
         if temporal is None:
             temporal = spec.time
         if interaction is None:
             interaction = spec.interaction
+        # Honor the registry's time_scope when the model was resolved from
+        # the registry without overrides; an explicit override wins and the
+        # scope falls back to the sar+ar1 derivation.
+        time_scope = spec.time_scope if (_spatial_from_spec
+                                         and _temporal_from_spec) else None
+        known = ("iid", "sar", "nested_iid", "nested_sar", "seblup_rao_yu")
+        if spec.area not in known:
+            raise ValueError(
+                f"model {model!r}: area type {spec.area!r} tidak didukung "
+                f"untuk family gaussian; tipe yang dikenal: {list(known)}")
+        if spec.time not in ("iid", "ar1"):
+            raise ValueError(
+                f"model {model!r}: time type {spec.time!r} tidak didukung "
+                f"untuk family gaussian; tipe yang dikenal: ['iid', 'ar1']")
+    else:
+        time_scope = None
 
     _gpu = {"yes": True, "no": False}.get(str(gpu).lower(), "auto")
     backend = Backend(gpu=_gpu)
 
     if spatial == "seblup_rao_yu":
         from stmmlib.gaussian.models import seblup_rao_yu_it
-        return seblup_rao_yu_it(formula, data, area_col, time_col, W=W,
-                                interaction=interaction_parse(interaction),
-                                method=method, n_starts=n_starts,
-                                response_col=response_col,
-                                backend=backend, **kwargs)
-    if spatial in ("nested_iid", "nested_sar"):
+        result = seblup_rao_yu_it(formula, data, area_col, time_col, W=W,
+                                  interaction=interaction_parse(interaction),
+                                  method=method, n_starts=n_starts,
+                                  response_col=response_col,
+                                  backend=backend, time_scope=time_scope,
+                                  **kwargs)
+    elif spatial in ("nested_iid", "nested_sar"):
         from stmmlib.gaussian.models import nested_iid_iid, nested_iid_ar1
         wrapper = nested_iid_ar1 if temporal == "ar1" else nested_iid_iid
-        return wrapper(formula, data, area_col, time_col, prov_col, kab_col,
-                       interaction=interaction_parse(interaction), W=W,
-                       method=method, n_starts=n_starts,
-                       response_col=response_col,
-                       backend=backend, **kwargs)
+        result = wrapper(formula, data, area_col, time_col, prov_col, kab_col,
+                         interaction=interaction_parse(interaction), W=W,
+                         method=method, n_starts=n_starts,
+                         response_col=response_col,
+                         backend=backend, time_scope=time_scope,
+                         **kwargs)
+    else:
+        from stmmlib.gaussian.models import stmm_normal_core
+        result = stmm_normal_core(formula, data, area_col, time_col,
+                                   spatial=spatial, temporal=temporal,
+                                   interaction=interaction_parse(interaction), W=W,
+                                   method=method, n_starts=n_starts,
+                                   response_col=response_col,
+                                   backend=backend, time_scope=time_scope,
+                                   **kwargs)
 
-    from stmmlib.gaussian.models import stmm_normal_core
-    return stmm_normal_core(formula, data, area_col, time_col,
-                            spatial=spatial, temporal=temporal,
-                            interaction=interaction_parse(interaction), W=W,
-                            method=method, n_starts=n_starts,
-                            response_col=response_col,
-                            backend=backend, **kwargs)
+    if str(inference).lower() == "lrt":
+        # The LRT re-fits the model with ML (REML likelihoods are not
+        # comparable across designs) and leaves the fit above untouched.
+        from stmmlib.gaussian.lrt_fixed import (attach_lrt_inference,
+                                                lrt_fixed_gaussian)
+        lrt = lrt_fixed_gaussian(result, lrt_terms, backend=backend,
+                                 deadline_s=lrt_deadline_s)
+        attach_lrt_inference(result, lrt)
+    return result
 
 
 def stmm_beta(
@@ -179,6 +232,9 @@ def stmm_beta(
     prov_col: str | None = "prov",
     kab_col: str | None = "kab",
     config=None,
+    inference: str = "wald",
+    lrt_terms: "list | None" = None,
+    lrt_deadline_s: "float | None" = None,
     **kwargs,
 ):
     """Fit a Beta spatio-temporal mixed model.
@@ -204,4 +260,6 @@ def stmm_beta(
                       n_starts=n_starts, preset=preset,
                       response_col=response_col,
                       area_col=area_col, time_col=time_col,
-                      prov_col=prov_col, kab_col=kab_col, config=config, **kwargs)
+                      prov_col=prov_col, kab_col=kab_col, config=config,
+                      inference=inference, lrt_terms=lrt_terms,
+                      lrt_deadline_s=lrt_deadline_s, **kwargs)

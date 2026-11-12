@@ -18,12 +18,31 @@ class BetastmmResult:
     def __init__(self, optim_results: dict, inference_results: dict):
         self._opt = optim_results
         self._inf = inference_results
+        self.lrt = optim_results.get("lrt")
         self._convergence = {
             "log_lik": optim_results.get("log_lik"),
             "AIC": optim_results.get("AIC"),
             "BIC": optim_results.get("BIC"),
             "optim": {"code": 0 if optim_results.get("converged") else 1},
         }
+
+    @property
+    def inference_method(self) -> str:
+        """Which test produced the reported fixed-effect p-values."""
+        return self._inf.get("method", "wald")
+
+    @property
+    def inference_ok(self) -> bool | None:
+        """Whether the convergence certificate allows Wald inference.
+
+        None when the fit carries no certificate (fast/medium presets skip
+        the Hessian). False means the point sits on a bound or the gradient
+        is too large: point estimates and predictions are fine, the Wald
+        z/p/CI are not.
+        """
+        cert = self._opt.get("certificate") or {}
+        valid = cert.get("valid")
+        return None if valid is None else bool(valid)
 
     @property
     def model(self) -> str:
@@ -602,10 +621,14 @@ class BetastmmResult:
             return {}
 
     # ── Rich printable summary (English, statsmodels style) ────────────────
-    def summary(self, width: int = 72) -> str:
-        """Format an English, statsmodels-style summary report."""
+    def summary(self, width: int = 72, strict: bool = False) -> str:
+        """Format an English, statsmodels-style summary report.
+
+        strict=True hides the Wald inference (z, p and the interval) when
+        the convergence certificate says the fit is not inference-grade.
+        """
         from stmmlib.output_format import format_output
-        return format_output(self, width=width)
+        return format_output(self, width=width, strict=strict)
 
     def summary_dict(self) -> dict:
         """Programmatic summary (meta + effects + fit), sans printed strings."""

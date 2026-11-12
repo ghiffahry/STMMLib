@@ -47,12 +47,25 @@ def format_normal(obj: dict, width: int = 72) -> str:
     ln.append("")
 
     df = n - p
+    inf = obj.get("inference") or {}
+    lrt = inf.get("test") == "lrt"
     if len(beta_hat) and len(se_beta):
         t_vals = beta_hat / np.where(se_beta > 0, se_beta, 1.0)
         p_vals = _t_pvalues(t_vals, df)
+        stat_hdr, p_hdr = "t", "P>|t|"
+        if lrt:
+            # The reported statistic follows the requested test; the Wald
+            # p-value stays available in inference["pvalue_wald"].
+            stat = np.asarray(inf.get("statistic", t_vals), dtype=float)
+            p_lrt = np.asarray(inf.get("pvalue", p_vals), dtype=float)
+            if stat.shape == t_vals.shape:
+                t_vals = stat
+            if p_lrt.shape == p_vals.shape:
+                p_vals = p_lrt
+            stat_hdr, p_hdr = "stat", "p (LRT)"
         ln.append("Fixed Effects:")
-        ln.append(f"  {'':<2}{'':<24}{'coef':>11}{'std err':>11}{'t':>9}"
-                  f"{'P>|t|':>11}{'':>6}")
+        ln.append(f"  {'':<2}{'':<24}{'coef':>11}{'std err':>11}{stat_hdr:>9}"
+                  f"{p_hdr:>11}{'':>6}")
         for i in range(len(beta_hat)):
             if i >= len(coef_names):
                 break
@@ -63,6 +76,9 @@ def format_normal(obj: dict, width: int = 72) -> str:
                 f"{_fmt(p_vals[i]):>11} {star:>2}"
             )
         ln.append(f"  (df = {_fmt(df, 0)})")
+        if lrt:
+            ln.append("Uji LRT: D = 2(ll_full - ll_red), df = 1, acuan chi2_1; "
+                      "p Wald disimpan terpisah pada pvalue_wald.")
         ln.extend(_footer(width))
     else:
         ln.append("(Fixed-effect estimates not computed for this model)")

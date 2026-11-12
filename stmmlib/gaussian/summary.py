@@ -61,6 +61,38 @@ def sig_code(p):
 # ---------------------------------------------------------------------------
 
 
+def residual_df(fit: dict) -> float:
+    """Residual degrees of freedom of a Gaussian fit."""
+    return float(fit.get("n", np.nan)) - float(fit.get("p", 0))
+
+
+def _satterthwaite_unavailable(df_method: str, stacklevel: int) -> None:
+    """Say plainly that the Satterthwaite branch is the residual branch."""
+    if df_method == "satterthwaite":
+        warnings.warn(
+            "df_method='satterthwaite' is not implemented; the t reference "
+            "uses residual df (n - p). Pass df_method='normal' for a "
+            "z reference.", UserWarning, stacklevel=stacklevel)
+
+
+def wald_pvalues(fit: dict, df_method: str = "satterthwaite") -> np.ndarray:
+    """Two-sided Wald p-values for the fixed effects.
+
+    The same reference the table uses, so the LRT block can keep the Wald
+    p-values next to the LRT ones without a second, slightly different
+    implementation.
+    """
+    beta_hat = np.asarray(fit["beta_hat"]).ravel()
+    se_beta = np.asarray(fit["se_beta"]).ravel()
+    t_vals = beta_hat / np.where(se_beta > 0, se_beta, 1.0)
+    _satterthwaite_unavailable(df_method, stacklevel=3)
+    if df_method == "normal":
+        from scipy.stats import norm
+        return 2 * norm.sf(np.abs(t_vals))
+    from scipy.stats import t as t_dist
+    return 2 * t_dist.sf(np.abs(t_vals), df=residual_df(fit))
+
+
 def fixed_table(fit: dict, df_method: str = "satterthwaite", backend: Backend = None) -> pd.DataFrame:
     """Build fixed effects table: Estimate, SE, df, t-value, p-value.
 
@@ -71,6 +103,8 @@ def fixed_table(fit: dict, df_method: str = "satterthwaite", backend: Backend = 
 
     Returns:
         DataFrame with columns: Estimate, SE, df, t value, Pr(>|t|).
+        In LRT mode the statistic and the p-value come from the likelihood
+        ratio test and the columns are named accordingly.
     """
     beta_hat = np.asarray(fit["beta_hat"]).ravel()
     se_beta = np.asarray(fit["se_beta"]).ravel()
@@ -78,6 +112,7 @@ def fixed_table(fit: dict, df_method: str = "satterthwaite", backend: Backend = 
     p = fit.get("p", len(beta_hat))
 
     # Degrees of freedom
+    _satterthwaite_unavailable(df_method, stacklevel=3)
     if df_method == "residual":
         df = np.full(p, n - p, dtype=np.float64)
     elif df_method == "satterthwaite":
@@ -86,21 +121,26 @@ def fixed_table(fit: dict, df_method: str = "satterthwaite", backend: Backend = 
     else:  # normal
         df = np.full(p, np.inf, dtype=np.float64)
 
-    from scipy.stats import t as t_dist, norm
-
     t_vals = beta_hat / np.where(se_beta > 0, se_beta, 1.0)
-    p_vals = np.where(
-        np.isinf(df),
-        2 * norm.sf(np.abs(t_vals)),
-        2 * t_dist.sf(np.abs(t_vals), df=df),
-    )
+    p_vals = wald_pvalues(fit, df_method)
+
+    inf = fit.get("inference") or {}
+    stat_col, p_col = "t value", "Pr(>|t|)"
+    if inf.get("test") == "lrt":
+        stat = np.asarray(inf.get("statistic", t_vals), dtype=float)
+        p_lrt = np.asarray(inf.get("pvalue", p_vals), dtype=float)
+        if stat.shape == t_vals.shape:
+            t_vals = stat
+        if p_lrt.shape == p_vals.shape:
+            p_vals = p_lrt
+        stat_col, p_col = "stat (LRT)", "p (LRT)"
 
     return pd.DataFrame({
         "Estimate": beta_hat,
         "SE": se_beta,
         "df": df,
-        "t value": t_vals,
-        "Pr(>|t|)": p_vals,
+        stat_col: t_vals,
+        p_col: p_vals,
     })
 
 

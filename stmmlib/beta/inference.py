@@ -51,9 +51,9 @@ def compute_stbl_inference(optim_results: dict, method: str = "numeric",
     n_params = len(param_vec)
 
     # Single Hessian source: solver H only (eps 1e-4 at best_param via
-    # _neg_marginal_l with warm-chain inner plus polish). A second FD here
-    # (eps 1e-5, fixed-start inner, no prior, gamma rho bound) gave 165x
-    # SE divergence on M5, so no recompute: missing H means honest NaNs.
+    # _neg_marginal_l with warm-chain inner plus polish). A second FD
+    # computed here gives a materially different answer, so it is not
+    # computed: missing H means honest NaNs.
     _H_solver = (optim_results.get("optim", {}) or {}).get("hessian")
     if _H_solver is None or np.asarray(_H_solver).shape != (n_params, n_params):
         _na = _empty_inference(optim_results, p, ksd, raw_dep)

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 def stmm_beta_make_design(d: pd.DataFrame, model: str, W=None, backend: Backend = None,
-                          phi_bound: float = 0.95) -> dict:
+                          rho_bound: float = 0.95) -> dict:
     """Construct design matrix Z and metadata for a Beta STMM.
 
     Z has area-major cell order: (area1:time1..timeT, area2:time1..timeT, ...)
@@ -80,7 +80,7 @@ def stmm_beta_make_design(d: pd.DataFrame, model: str, W=None, backend: Backend 
             "cell": list(range(n_prov + n_kab, n_prov + n_kab + n_cell)),
         }
         des = {
-            "Z": Z, "blocks": blocks, "W_gamma": None, "rho_bound_g": phi_bound,
+            "Z": Z, "blocks": blocks, "W_gamma": None, "rho_bound_g": rho_bound,
             "B_area": None, "B_time": None, "n": n, "m": m, "T": T,
             "n_cell": n_cell, "n_gamma": 0,
             "n_prov": n_prov, "n_kab": n_kab,
@@ -104,13 +104,13 @@ def stmm_beta_make_design(d: pd.DataFrame, model: str, W=None, backend: Backend 
     else:
         des = _design_flat(d, area, time, time_scope, interaction, W, backend,
                            area_idx, time_idx, n, m, T, n_cell, _make_Z,
-                           phi_bound=phi_bound)
+                           rho_bound=rho_bound)
     return des
 
 
 def _design_flat(d, area, time, time_scope, interaction, W, backend,
                  area_idx, time_idx, n, m, T, n_cell, _make_Z,
-                 phi_bound: float = 0.95):
+                 rho_bound: float = 0.95):
     """Flat (non-nested) design: Z = [Z_area, Z_cell|Z_time] (+ Z_gamma)."""
     # Area dummy
     Z_area = _make_Z(area_idx, n, m)
@@ -139,7 +139,7 @@ def _design_flat(d, area, time, time_scope, interaction, W, backend,
     B_area = None
     B_time = None
     W_gamma = None
-    rho_bound_g = phi_bound
+    rho_bound_g = rho_bound
 
     if interaction != "none":
         B_area = _contr_sum(m)
@@ -152,11 +152,12 @@ def _design_flat(d, area, time, time_scope, interaction, W, backend,
                 W_arr = np.asarray(W, dtype=np.float64)
             W_gamma = W_arr
             # BUG-B1 fix: eigvals (spectral radius), NOT eigvalsh -- W is
-            # asymmetric; eigvalsh silently reads one triangle (measured
-            # 0.770 vs true 0.950 on KNN-4 row-standardized W).
+            # asymmetric; eigvalsh silently reads one triangle, so the
+            # spectral radius can come out wrong on a row-standardized
+            # weights matrix.
             eigenvalues = np.linalg.eigvals(W_arr)
             max_abs_eig = np.max(np.abs(eigenvalues))
-            rho_bound_g = phi_bound / max_abs_eig if max_abs_eig > 1e-10 else phi_bound
+            rho_bound_g = rho_bound / max_abs_eig if max_abs_eig > 1e-10 else rho_bound
 
         # Interaction Z
         Z_gamma = _build_Z_gamma(area_idx, time_idx, n, m, T, interaction, B_area, B_time)

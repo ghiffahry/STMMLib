@@ -70,12 +70,10 @@ def _assess(obj: Any) -> str:
     fam = getattr(obj, "family", None)
     if fam is not None:
         return "beta" if str(fam).lower() in ("beta",) else "normal"
-    if cls == "StMM":
-        return "beta" if str(getattr(obj, "_family", "gaussian")).lower() == "beta" else "normal"
     return "normal"
 
 
-def format_output(obj: Any, width: int = 72) -> str:
+def format_output(obj: Any, width: int = 72, strict: bool = False) -> str:
     """Format a fitted stmmlib object for display.
 
     Dispatches automatically on the fitted object's family.
@@ -83,6 +81,8 @@ def format_output(obj: Any, width: int = 72) -> str:
     Args:
         obj: A BetastmmResult (beta) or a normal fit dict.
         width: Line width for the report.
+        strict: For the beta family, hide the Wald inference when the
+            convergence certificate says the fit is not inference-grade.
 
     Returns:
         str: English, statsmodels-style summary report.
@@ -93,7 +93,7 @@ def format_output(obj: Any, width: int = 72) -> str:
         return format_normal(obj, width=width)
 
     from stmmlib.output_format_beta import format_beta
-    head = format_beta(obj, width=width)
+    head = format_beta(obj, width=width, strict=strict)
 
     # Append evaluation + diagnostics so a single `print(fit)` shows the full
     # English report, exactly as stmm_beta_evaluation / stmm_beta_diagnostics.

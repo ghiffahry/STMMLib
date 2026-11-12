@@ -1,44 +1,16 @@
-"""Beta model structure registry: M1-M14 mapping.
+"""Beta model structure: one source of truth for the model list.
 
-Maps model IDs to their structural components: area type, time type,
-time_scope, and interaction type for the Beta family.
+The model list lives in `stmmlib/registry.py`. This module only adds the
+Beta-specific reading of it, so the fitter and the public API can never
+disagree about which models exist.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from stmmlib.registry import MODELS
 
-
-@dataclass(frozen=True)
-class BetaModelSpec:
-    """Structural specification for one Beta model."""
-
-    model_id: str
-    area: str
-    time: str
-    time_scope: str  # "area_specific" or "global"
-    interaction: str  # "none", "iid", "spatial", "temporal", "st"
-    label: str
-
-
-BETA_MODELS: dict[str, BetaModelSpec] = {
-    "m1_iid_iid": BetaModelSpec("m1_iid_iid", "iid", "iid", "area_specific", "none", "IID + IID"),
-    "m2_iid_ar1": BetaModelSpec("m2_iid_ar1", "iid", "ar1", "area_specific", "none", "IID + AR(1)"),
-    "m3_sar_iid": BetaModelSpec("m3_sar_iid", "sar", "iid", "area_specific", "none", "SAR + IID"),
-    "m4_sar_ar1": BetaModelSpec("m4_sar_ar1", "sar", "ar1", "global", "none", "SAR + AR(1) [global]"),
-    "m5_seblup_rao_yu_it": BetaModelSpec("m5_seblup_rao_yu_it", "seblup_rao_yu", "ar1", "area_specific", "none", "SEBLUP Rao-Yu IT"),
-    "m6_nested_iid_iid": BetaModelSpec("m6_nested_iid_iid", "nested_iid", "iid", "area_specific", "none", "Nested IID + IID"),
-    "m7_nested_ar1": BetaModelSpec("m7_nested_ar1", "nested_sar", "ar1", "area_specific", "none", "Nested IID + AR(1)"),
-    "m8_iid_iid_int": BetaModelSpec("m8_iid_iid_int", "iid", "iid", "area_specific", "iid", "IID + IID + Type I"),
-    "m9_sar_iid_int": BetaModelSpec("m9_sar_iid_int", "sar", "iid", "area_specific", "spatial", "SAR + IID + Type II"),
-    "m10_iid_ar1_int": BetaModelSpec("m10_iid_ar1_int", "iid", "ar1", "area_specific", "temporal", "IID + AR(1) + Type III"),
-    "m11_sar_ar1_int": BetaModelSpec("m11_sar_ar1_int", "sar", "ar1", "global", "st", "SAR + AR(1) + Type IV [global]"),
-    "m12_seblup_rao_yu_it_int": BetaModelSpec("m12_seblup_rao_yu_it_int", "seblup_rao_yu", "ar1", "area_specific", "st", "SEBLUP Rao-Yu IT + Type IV"),
-    "m13_nested_iid_iid_int": BetaModelSpec("m13_nested_iid_iid_int", "nested_iid", "iid", "area_specific", "temporal", "Nested IID + IID + Type III"),
-    "m14_nested_ar1_int": BetaModelSpec("m14_nested_ar1_int", "nested_sar", "ar1", "area_specific", "iid", "Nested IID + AR(1) + Type I"),
-    "beta_regression": BetaModelSpec("beta_regression", "iid", "iid", "area_specific", "none", "Beta Regression (fixed only)"),
-}
+KNOWN_AREA = ("iid", "sar", "nested_iid", "nested_sar", "seblup_rao_yu")
+KNOWN_TIME = ("iid", "ar1")
 
 
 def stmm_beta_structure(model: str) -> dict:
@@ -50,9 +22,18 @@ def stmm_beta_structure(model: str) -> dict:
     Returns:
         dict with area, time, time_scope, interaction, label.
     """
-    spec = BETA_MODELS.get(model)
+    spec = MODELS.get(model)
     if spec is None:
-        raise KeyError(f"Unknown Beta model: {model!r}. Available: {list(BETA_MODELS.keys())}")
+        raise KeyError(
+            f"Unknown Beta model: {model!r}. Available: {list(MODELS.keys())}")
+    if spec.area not in KNOWN_AREA:
+        raise ValueError(
+            f"model {model!r}: area type {spec.area!r} tidak didukung "
+            f"untuk family Beta; tipe yang dikenal: {list(KNOWN_AREA)}")
+    if spec.time not in KNOWN_TIME:
+        raise ValueError(
+            f"model {model!r}: time type {spec.time!r} tidak didukung "
+            f"untuk family Beta; tipe yang dikenal: {list(KNOWN_TIME)}")
     return {
         "area": spec.area,
         "time": spec.time,

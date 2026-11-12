@@ -73,7 +73,7 @@ def rho_bound(W, backend: Backend, margin: float = 0.95) -> float:
 
     # BUG-B1 fix: eigvalsh assumes a SYMMETRIC matrix (reads one triangle
     # only) -- row-standardized KNN W is asymmetric, so the "bound" was a
-    # meaningless surrogate (measured: 0.770 vs the true 0.950 on KNN-4).
+    # meaningless surrogate for the spatial dependence.
     # The correct stability bound is the spectral radius: max |eig(W)|.
     if backend.device == "gpu":
         eigenvalues = xp.linalg.eigvals(xp.asarray(W_arr))
@@ -91,7 +91,7 @@ def effective_phi(raw_phi: float, phi_bound: float = 0.95) -> float:
     BUG-B3 fix, single source of truth: the model passes phi_t = phi_bound *
     tanh(raw) into ar1_precision, which squashes AGAIN (phi_bound * tanh(raw)).
     Display/SE/interval code must use this double squash, not a single one
-    (old display showed phi 0.9025 where the model really had 0.733).
+    (an old display could show a phi the model did not have).
     """
     u = phi_bound * np.tanh(raw_phi)
     return phi_bound * np.tanh(u)

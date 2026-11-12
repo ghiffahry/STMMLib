@@ -11,7 +11,8 @@ from dataclasses import dataclass
 
 # Auto weak-prior constants (blme-style, Chung et al. 2013): center 6.9 ~
 # phi 1000. These do NOT move the box bounds, only the prior center/spread.
-# M5 queen: tarikan ganda (phi+dep) jatuh ke lembah degenerate ll -276832, maka dep off.
+# With two coupled directions (phi + dep) the weak-prior path can collapse
+# into a degenerate well, so the dep part of the auto prior is off by default.
 PHI_PRIOR_AUTO_MEAN = 6.9
 PHI_PRIOR_AUTO_SD = 2.0
 DEP_PRIOR_AUTO_SD = None
@@ -39,16 +40,32 @@ class BetaFitConfig:
     """
 
     phi_bound: float = 0.95
-    # Half-life rationale for 0.95: rho=0.95 gives half-life
-    # ln(0.5)/ln(0.95) ~= 13.5 periods, about the panel length T=11.
+    # 0.95 is a conventional stationarity margin for the dependence
+    # coefficients: rho = 0.95 corresponds to a half-life of ~13.5 periods.
     # Do not raise the bound just to escape the boundary.
+    #
+    # Two correlation bounds, not one:
+    #   phi_bound: the AR(1) coefficient bound (phi_T, phi_gamma).
+    #   rho_bound: the spatial correlation bound (SAR rho, gamma rho).
+    # Neither is the Beta precision: that one is logphi_bounds.
+    rho_bound: float = 0.95
     beta_bounds: tuple = (-20.0, 20.0)
     logphi_bounds: tuple = (-10.0, 10.0)
     logs_bounds: tuple = (-10.0, 3.0)
     dep_margin: float = 0.95
     grad_tol: float = 1.0
     grad_slack: float = 100.0
+    # Inner-solve budget for the analytic-gradient path on large panels.
+    # Set from one large panel (the fit jumps inner modes and returns a
+    # garbage gradient with a full budget); it has not been swept across
+    # panel sizes. A smaller cap trades accuracy for stability; the deep
+    # gradient solve below is unaffected. Re-tune before relying on it for
+    # a new model family or a much larger panel.
     inner_probe_cap: int = 15
+    # Auto weak-prior refit. None keeps the historical rule (the refit runs
+    # only when no explicit config was passed); True always runs it, False
+    # never runs it.
+    auto_prior: bool | None = None
     # Interim dataset-calibrated prior; always report alongside unpenalized ML (Chung et al. 2013).
     phi_prior_mean: float | None = None
     phi_prior_sd: float | None = None
@@ -56,7 +73,8 @@ class BetaFitConfig:
     hessian_time_budget: float | None = 3600.0
     # Laplace posterior curvature of the random effects at the final mode
     # (H_b = Z'diag(w)Z + Q), stored as its Cholesky factor for EBP draws.
-    # Opt-in: dense q x q (q ~ 1.7e3 for M5, ~23 MB per fit). Default off.
+    # Opt-in: dense q x q precision Cholesky, one per fit; large for big
+# random-effect designs. Default off.
     compute_posterior: bool = False
 
     def __post_init__(self):

@@ -39,10 +39,13 @@ htmlcov/
 .ipynb_checkpoints/
 
 # ---------------------------------------------------------------------------
-# Catatan metodologis dan rangkaian uji internal (tidak dipublikasikan)
+# Catatan metodologis dan rencana kerja (tidak dipublikasikan)
 # ---------------------------------------------------------------------------
 stmmlib/note/
-tests/
+docs/notes/
+docs/superpowers/
+
+# The test suite travels with the code: a fix without its test is not a fix.
 
 # ---------------------------------------------------------------------------
 # Skrip dan hasil running tesis (data, notebook, cache fit)

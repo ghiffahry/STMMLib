@@ -13,7 +13,11 @@ from stmmlib.stmm import stmm, stmm_normal, stmm_beta
 from stmmlib.output_format import format_output
 from stmmlib._backend import Backend
 
-__version__ = "0.1.0"
+try:  # single source of truth for the version: the installed package metadata
+    from importlib.metadata import version as _pkg_version
+    __version__ = _pkg_version("stmmlib")
+except Exception:  # source checkout without an install
+    __version__ = "0.2.0"
 __all__ = [
     "stmm",
     "stmm_normal",

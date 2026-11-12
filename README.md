@@ -10,8 +10,9 @@ families behind one API.
 optional area-time interactions. Two likelihood families are available, so the
 same model structure can be fitted to continuous responses or to proportions.
 
-The package was developed for small area estimation on Indonesian district
-poverty data and is published as a reference implementation for that work.
+Developed as a reference implementation for a study of Indonesian district
+poverty data. It is a general tool for area-level panel data, does not
+depend on that dataset, and is published as a software reference.
 
 ## Features
 
@@ -22,6 +23,8 @@ poverty data and is published as a reference implementation for that work.
 - Prediction: EBLUP for Gaussian, EBP from posterior draws for Beta, both
   in-sample and for same-area holdout
 - Configurable column names, so data does not need renaming
+- Fixed-effect inference in both families: Wald tests and restricted-refit
+  likelihood-ratio tests (`inference="lrt"`, `lrt_terms=[...]`)
 - Optional GPU backend through CuPy or PyTorch
 
 ## Installation
@@ -40,52 +43,55 @@ For the optional GPU backend:
 pip install -e ".[gpu]"
 ```
 
+Run the test suite:
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
 ## Quick start
 
-Gaussian fit:
+Runs end to end on synthetic data, nothing external needed:
 
 ```python
+import numpy as np
 import pandas as pd
 from stmmlib.stmm import stmm
 
-df = pd.read_csv("panel.csv")  # needs y, area, time, and predictor columns
+m, T = 12, 6
+rng = np.random.default_rng(7)
+area = np.repeat(np.arange(m), T)
+time = np.tile(np.arange(T), m)
 
-# W must be m x m, row standardised, with rows ordered like sorted(area)
-fit = stmm(
-    data=df,
-    model="m3_sar_iid",
-    family="gaussian",
-    W=W,
-    method="REML",
-    area_col="area",
-    time_col="time",
-    gpu="no",
-)
+df = pd.DataFrame({
+    "y": np.clip(rng.beta(6, 4, m * T), 1e-4, 1 - 1e-4),   # in (0, 1), as required
+    "area": area,
+    "time": time,
+    "x1": rng.normal(size=m * T),
+    "x2": rng.normal(size=m * T),
+})
 
-fit["beta_hat"]
-fit["se_beta"]
-fit["blup"]["v_hat"]
+fit = stmm(data=df, model="m1_iid_iid", family="beta",
+           method="Laplace", gpu="no", n_starts=1)
+print(fit.summary())             # reads the certificate, refuses to call an invalid fit inference-grade
+print(fit.certificate["valid"])  # True/False: may the SEs be quoted?
 ```
 
-Beta fit:
+Gaussian family, same call surface:
 
 ```python
-fit = stmm(
-    data=df,
-    model="m5_seblup_rao_yu_it",
-    family="beta",
-    W=W,
-    method="Laplace",
-    area_col="area",
-    time_col="time",
-    gpu="no",
-)
+df_gauss = df.assign(y=df["x1"] + rng.normal(0, 1, len(df)))
+W = np.ones((m, m)); np.fill_diagonal(W, 0); W /= W.sum(1, keepdims=True)
 
-print(fit.summary())
-fit.beta_original   # fixed effects on the original predictor scale
-fit.se_original
-mu, se_mu = fit.ebp(n_draws=200, seed=0, return_se=True)
+fit = stmm(data=df_gauss, model="m3_sar_iid", family="gaussian",
+           W=W, method="REML", area_col="area", time_col="time", gpu="no")
+fit["beta_hat"]; fit["se_beta"]; fit["blup"]["v_hat"]
 ```
+
+Fixed-effect inference in both families, Wald or likelihood-ratio test,
+and the requirement that the LRT compares ML likelihoods, are documented
+in `docs/API.md`.
 
 ## Models
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stmmlib"
-version = "0.1.0"
+version = "0.2.0"
 description = "Family-aware spatio-temporal mixed models (Gaussian + Beta) with optional GPU acceleration"
 readme = "README.md"
 license = {text = "MIT"}
@@ -12,11 +12,36 @@ requires-python = ">=3.10"
 authors = [
     {name = "Ghardapaty Ghiffary"},
 ]
+keywords = [
+    "spatio-temporal",
+    "mixed models",
+    "small area estimation",
+    "Beta regression",
+    "generalized linear mixed models",
+    "areal data",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.11",
     "pandas>=2.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ghiffahry/STMMLib"
+Repository = "https://github.com/ghiffahry/STMMLib"
+Issues = "https://github.com/ghiffahry/STMMLib/issues"
 
 [project.optional-dependencies]
 gpu = ["cupy-cuda12x>=13.0", "torch>=2.0"]

@@ -32,6 +32,24 @@ from stmmlib.gaussian.gls import (
     logLik_REML,
     compute_AIC,
 )
+
+
+def _warn_unused_conventional_columns(data, x_cols):
+    """Warn when the frame carries the conventional grouping names that this
+    model excludes.
+
+    The seblup and flat paths exclude "prov"/"kab" by convention (a nested
+    frame must not leak into a flat fit), so a predictor that happens to be
+    named "prov" or "kab" would otherwise be dropped without a word.
+    """
+    skipped = [c for c in ("prov", "kab")
+               if c in data.columns and c not in set(x_cols)]
+    for c in skipped:
+        warnings.warn(
+            f"kolom {c!r} tidak masuk desain regresi model ini (konvensi "
+            "kolom pengelompokan); rename kolom prediktor itu bila Anda "
+            "bermaksud memakainya sebagai prediktor.",
+            UserWarning, stacklevel=4)
 from stmmlib.gaussian.hessian import compute_hessian_se
 from stmmlib.gaussian.blup import compute_blup, nested_blup, nested_ar1_blup
 from stmmlib.gaussian.variance_decomp import (
@@ -68,6 +86,7 @@ def stmm_normal_core(
     kab_col: str | None = None,
     response_col: str | None = None,
     backend: Backend = None,
+    time_scope: str | None = None,
 ) -> dict:
     """Main core fitting engine for stLMM class (M1-M4).
 
@@ -101,7 +120,8 @@ def stmm_normal_core(
     prepared["W"] = W
 
     # Build model
-    time_scope = "global" if (spatial == "sar" and temporal == "ar1") else "area_specific"
+    if time_scope is None:
+        time_scope = "global" if (spatial == "sar" and temporal == "ar1") else "area_specific"
     model = make_model(spatial, temporal, interaction, time_scope)
 
     # Design matrices
@@ -116,9 +136,13 @@ def stmm_normal_core(
 
     # Fixed-effects design X (grouping columns prov/kab must not leak in)
     y_col = response_col or "y"
-    _skip = {area, time, y_col, "area", "time", "y",
-             prov_col or "prov", kab_col or "kab"}
+    # Skip the columns this fit actually uses. The literal "area"/"time"/"y"
+    # in the old skip list silently dropped a user predictor that happened
+    # to carry that name; prov/kab stay skipped because a nested frame must
+    # not leak its grouping columns into a flat model.
+    _skip = {area, time, y_col, prov_col or "prov", kab_col or "kab"}
     x_cols = [c for c in data.columns if c not in _skip]
+    _warn_unused_conventional_columns(data, x_cols)
     if y_col in data.columns:
         y = data[y_col].values.astype(np.float64)
     else:
@@ -180,7 +204,9 @@ def stmm_normal_core(
     r2 = compute_R2(vd)
 
     # Assemble result
-    coef_names = [f"beta_{i}" for i in range(X.shape[1])]
+    # The predictor names are kept: a table can be read, and the LRT knows
+    # which design column belongs to which term.
+    coef_names = ["(Intercept)"] + list(x_cols)
     result = {
         "model_name": model.get("area_type", "iid") + "+" + model.get("time_type", "iid"),
         "family": "normal",
@@ -207,6 +233,9 @@ def stmm_normal_core(
         "X": X,
         "V": V,
         "coef_names": coef_names,
+        "x_cols": list(x_cols),
+        "y": y,
+        "lrt_family": "core",
         "model": model,
         "data": prepared,
         "W": W,
@@ -272,6 +301,7 @@ def seblup_rao_yu_it(
     formula, data, area, time, W, interaction="none", area_type="sar",
     method="REML", start=None, n_starts=3, max_iter=200,
     compute_se=True, verbose=False, response_col="y", backend=None,
+    time_scope="area_specific",
 ):
     """SEBLUP Rao-Yu IT model (M5/M12)."""
     if backend is None:
@@ -281,7 +311,7 @@ def seblup_rao_yu_it(
     prepared = prepare_panel_data(data, area, time, verbose=verbose)
     prepared["W"] = W
 
-    model = make_model(area_type, "ar1", interaction, "area_specific")
+    model = make_model(area_type, "ar1", interaction, time_scope)
     des = build_design_matrices(prepared, backend)
     prepared.update(des)
     # Interaction design (Z_gamma) so logLik_seblup5/build_V_seblup5 include V_gamma
@@ -292,7 +322,12 @@ def seblup_rao_yu_it(
     n = prepared["n"]
 
     y = data[response_col].values.astype(np.float64)
-    x_cols = [c for c in data.columns if c not in (area, time, "y", "area", "time", "prov", "kab")]
+    # The response is skipped under its own name: with the literal "y" the
+    # response became its own predictor whenever response_col was something
+    # else (a silently wrong model).
+    _skip = {area, time, response_col or "y", "prov", "kab"}
+    x_cols = [c for c in data.columns if c not in _skip]
+    _warn_unused_conventional_columns(data, x_cols)
     X = np.column_stack([np.ones(n)] + [data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
 
     opt = fit_seblup5(y, X, prepared, interaction, area_type, backend,
@@ -349,13 +384,18 @@ def seblup_rao_yu_it(
         "log_lik": log_lik, "AIC": compute_AIC(log_lik, k),
         "BIC": -2 * log_lik + np.log(n) * k, "k": k,
         "converged": opt["converged"],
+        # The LRT needs the design, the response and the predictor names
+        "X": X, "y": y, "x_cols": list(x_cols),
+        "coef_names": ["(Intercept)"] + list(x_cols),
+        "model": model, "lrt_family": "seblup",
     }
 
 
 def nested_iid_iid(
     formula, data, area, time, prov, kab, interaction="none", W=None,
     method="REML", start=None, n_starts=3, max_iter=200,
-    compute_blup=True, compute_se=True, verbose=False, response_col="y", backend=None,
+    compute_blup=True, compute_se=True, verbose=False, response_col="y",
+    backend=None, time_scope="area_specific",
 ):
     """Nested IID + IID model (M6/M13)."""
     if backend is None:
@@ -365,11 +405,14 @@ def nested_iid_iid(
     prepared = prepare_panel_data(data, area, time, prov_col=prov, kab_col=kab, verbose=verbose)
     prepared["W"] = W
 
-    model = make_model("nested_iid", "iid", interaction)
+    model = make_model("nested_iid", "iid", interaction, time_scope)
     n = prepared["n"]
 
     y = data[response_col].values.astype(np.float64)
-    x_cols = [c for c in data.columns if c not in (area, time, prov, kab, "y")]
+    # Skip the columns this fit actually uses; the response under its own
+    # name, so it can never become its own predictor.
+    _skip = {c for c in (area, time, prov, kab, response_col or "y") if c}
+    x_cols = [c for c in data.columns if c not in _skip]
     X = np.column_stack([np.ones(n)] + [data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
 
     # Build nested Z matrices
@@ -410,13 +453,18 @@ def nested_iid_iid(
         "log_lik": log_lik,
         "AIC": compute_AIC(log_lik, k), "BIC": -2 * log_lik + np.log(n) * k, "k": k,
         "converged": opt["converged"],
+        # The LRT needs the design, the response and the predictor names
+        "X": X, "y": y, "x_cols": list(x_cols),
+        "coef_names": ["(Intercept)"] + list(x_cols),
+        "model": model, "data": prepared, "lrt_family": "nested",
     }
 
 
 def nested_iid_ar1(
     formula, data, area, time, prov, kab, interaction="none", W=None,
     method="REML", start=None, n_starts=3, max_iter=200,
-    compute_blup=True, compute_se=True, verbose=False, response_col="y", backend=None,
+    compute_blup=True, compute_se=True, verbose=False, response_col="y",
+    backend=None, time_scope="area_specific",
 ):
     """Nested IID + AR1 model (M7/M14)."""
     if backend is None:
@@ -426,11 +474,14 @@ def nested_iid_ar1(
     prepared = prepare_panel_data(data, area, time, prov_col=prov, kab_col=kab, verbose=verbose)
     prepared["W"] = W
 
-    model = make_model("nested_sar", "ar1", interaction)
+    model = make_model("nested_sar", "ar1", interaction, time_scope)
     n = prepared["n"]
 
     y = data[response_col].values.astype(np.float64)
-    x_cols = [c for c in data.columns if c not in (area, time, prov, kab, "y")]
+    # Skip the columns this fit actually uses; the response under its own
+    # name, so it can never become its own predictor.
+    _skip = {c for c in (area, time, prov, kab, response_col or "y") if c}
+    x_cols = [c for c in data.columns if c not in _skip]
     X = np.column_stack([np.ones(n)] + [data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
 
     from stmmlib.gaussian.design import build_Z_nested, build_interaction_matrices
@@ -470,4 +521,8 @@ def nested_iid_ar1(
         "log_lik": log_lik,
         "AIC": compute_AIC(log_lik, k), "BIC": -2 * log_lik + np.log(n) * k, "k": k,
         "converged": opt["converged"],
+        # The LRT needs the design, the response and the predictor names
+        "X": X, "y": y, "x_cols": list(x_cols),
+        "coef_names": ["(Intercept)"] + list(x_cols),
+        "model": model, "data": prepared, "lrt_family": "nested_ar1",
     }

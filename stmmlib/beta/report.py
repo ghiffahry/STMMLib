@@ -112,11 +112,20 @@ def _fmt_report(fit, ev) -> str:
     L.append("Model evaluation (%s)" % fit.model)
     L.append(bar)
     r2m = ev.get("R2_marginal"); r2c = ev.get("R2_conditional")
+
+    def _f(x, nd):
+        # nested models return NaN criteria (documented scope, criteria.py):
+        # say n/a instead of printing a misleading bare nan.
+        return (f"{x:.{nd}f}" if x is not None and np.isfinite(x) else "n/a")
+
     L.append(f"  logLik (Laplace)   : {ev['logLik']:.3f}")
     L.append(f"  AIC / BIC          : {ev['AIC']:.3f} / {ev['BIC']:.3f}")
-    L.append(f"  cAIC (cond)        : {ev['cAIC']:.3f}   (df_hat={ev['df_hat']:.2f})")
-    L.append(f"  R2 marginal        : {r2m:.4f}" if r2m is not None else "  R2 marginal        : nan")
-    L.append(f"  R2 conditional     : {r2c:.4f}" if r2c is not None else "  R2 conditional     : nan")
+    if np.isfinite(ev.get("cAIC", np.nan)):
+        L.append(f"  cAIC (cond)        : {ev['cAIC']:.3f}   (df_hat={ev['df_hat']:.2f})")
+    else:
+        L.append("  cAIC (cond)        : n/a (model nested; cAIC hanya untuk model datar)")
+    L.append(f"  R2 marginal        : {_f(r2m, 4)}")
+    L.append(f"  R2 conditional     : {_f(r2c, 4)}")
     L.append(bar)
     L.append(f"  Train (n={ev['n_train']})  RMSE={ev['train_RMSE']:.4f}  MAE={ev['train_MAE']:.4f}  log-score={ev['train_log_score']:.4f}")
     L.append(f"  Calibration: obs-mean={ev['calib_obs_mean']:.4f}  pred-mean={ev['calib_pred_mean']:.4f}")
@@ -282,7 +291,8 @@ def stmm_beta_diagnostics(fit, W=None, as_str: bool = True):
         lb = lb_summary
         L.append(f"  Ljung-Box (per-area, {lb['n_areas']} areas): median p={lb['median_p']:.4f}  min p={lb['min_p']:.4f}  reject={lb['n_reject']}/{lb['n_areas']}")
     else:
-        L.append("  Ljung-Box : insufficient per-area data.")
+        L.append("  Ljung-Box : insufficient per-area data "
+                 "(butuh >= 11 periode per area).")
     st = opt.get("status", "konvergen" if opt.get("converged") else "invalid")
     iters = om.get("iters", om.get("nit", "?"))
     max_iter = om.get("max_iter", "?")
