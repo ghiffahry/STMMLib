@@ -1,7 +1,7 @@
-"""stmmlib — Family-aware spatio-temporal mixed models.
+"""stmmlib - Family-aware spatio-temporal mixed models.
 
 Supports 14 model structures (M1-M14) for Gaussian and Beta families,
-with optional CUDA/GPU acceleration via CuPy.
+with optional CUDA acceleration via PyTorch for the Beta inner solves.
 """
 
 from stmmlib.registry import (
@@ -17,7 +17,7 @@ try:  # single source of truth for the version: the installed package metadata
     from importlib.metadata import version as _pkg_version
     __version__ = _pkg_version("stmmlib")
 except Exception:  # source checkout without an install
-    __version__ = "0.2.1"
+    __version__ = "0.2.2"
 __all__ = [
     "stmm",
     "stmm_normal",

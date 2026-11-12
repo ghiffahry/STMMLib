@@ -1,13 +1,14 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "stmmlib"
-version = "0.2.1"
+version = "0.2.2"
 description = "Family-aware spatio-temporal mixed models (Gaussian + Beta) with optional GPU acceleration"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
     {name = "Ghardapaty Ghiffary"},
@@ -23,7 +24,6 @@ keywords = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -43,9 +43,11 @@ dependencies = [
 Homepage = "https://github.com/ghiffahry/STMMLib"
 Repository = "https://github.com/ghiffahry/STMMLib"
 Issues = "https://github.com/ghiffahry/STMMLib/issues"
+Documentation = "https://github.com/ghiffahry/STMMLib/blob/main/docs/API.md"
+Changelog = "https://github.com/ghiffahry/STMMLib/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-gpu = ["cupy-cuda12x>=13.0", "torch>=2.0"]
+gpu = ["torch>=2.0"]
 dev = ["pytest>=7.0", "pytest-cov"]
 
 [tool.setuptools.packages.find]

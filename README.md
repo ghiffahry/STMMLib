@@ -20,12 +20,12 @@ depend on that dataset, and is published as a software reference.
 - Gaussian family: ML and REML by marginal likelihood
 - Beta family: Laplace-approximated ML with convergence certificates (gradient
   norm, Hessian positive definiteness, iteration count)
-- Prediction: EBLUP for Gaussian, EBP from posterior draws for Beta, both
-  in-sample and for same-area holdout
+- Prediction: EBLUP for Gaussian in-sample, and EBP from posterior draws for
+  Beta in-sample or for held-out periods of areas seen during fitting
 - Configurable column names, so data does not need renaming
 - Fixed-effect inference in both families: Wald tests and restricted-refit
   likelihood-ratio tests (`inference="lrt"`, `lrt_terms=[...]`)
-- Optional GPU backend through CuPy or PyTorch
+- Optional PyTorch GPU acceleration for the Beta inner solves (`gpu="yes"`)
 
 ## Installation
 
@@ -41,6 +41,9 @@ For the optional GPU backend:
 ```bash
 pip install "stmmlib[gpu]"
 ```
+
+The `gpu` extra installs PyTorch; GPU use requires a CUDA-enabled PyTorch
+build.
 
 Install from source instead:
 
@@ -88,7 +91,7 @@ df = pd.DataFrame({
 
 fit = stmm(data=df, model="m1_iid_iid", family="beta",
            method="Laplace", gpu="no", n_starts=1)
-print(fit.summary())             # reads the certificate, refuses to call an invalid fit inference-grade
+print(fit.summary(strict=True))  # hides Wald inference when the certificate is not inference-grade
 print(fit.certificate["valid"])  # True/False: may the SEs be quoted?
 ```
 
@@ -105,7 +108,7 @@ fit["beta_hat"]; fit["se_beta"]; fit["blup"]["v_hat"]
 
 Fixed-effect inference in both families, Wald or likelihood-ratio test,
 and the requirement that the LRT compares ML likelihoods, are documented
-in `docs/API.md`.
+in [`docs/API.md`](https://github.com/ghiffahry/STMMLib/blob/main/docs/API.md).
 
 ## Models
 
@@ -117,14 +120,14 @@ in `docs/API.md`.
 | `m4_sar_ar1` | SAR | AR(1) | none |
 | `m5_seblup_rao_yu_it` | SEBLUP Rao-Yu | AR(1) | none |
 | `m6_nested_iid_iid` | nested IID | IID | none |
-| `m7_nested_ar1` | nested SAR | AR(1) | none |
+| `m7_nested_ar1` | nested IID | AR(1) | none |
 | `m8_iid_iid_int` | IID | IID | IID |
 | `m9_sar_iid_int` | SAR | IID | spatial |
 | `m10_iid_ar1_int` | IID | AR(1) | temporal |
 | `m11_sar_ar1_int` | SAR | AR(1) | spatio-temporal |
 | `m12_seblup_rao_yu_it_int` | SEBLUP Rao-Yu | AR(1) | spatio-temporal |
 | `m13_nested_iid_iid_int` | nested IID | IID | temporal |
-| `m14_nested_ar1_int` | nested SAR | AR(1) | IID |
+| `m14_nested_ar1_int` | nested IID | AR(1) | IID |
 | `beta_regression` | none | none | none |
 
 Models ending in `_int` add an interaction term between area and time effects.
@@ -140,25 +143,26 @@ Models with SAR or SEBLUP area effects require `W`.
 - Fixed effects in the Beta family are standardised internally. Use
   `beta_original` and `se_original` for reporting, not the standardised values.
 - `ebp_newdata()` predicts for held-out periods of areas seen during fitting.
-  Areas never seen during fitting are rejected.
+  Areas never seen during fitting are rejected. Nested and interaction models
+  are not supported.
 - Accuracy presets: `fast`, `balanced`, `medium`, `full`.
 
 ## Requirements
 
 - Python 3.10 or newer
 - NumPy 1.24+, SciPy 1.11+, pandas 2.0+
-- CuPy and PyTorch only for the `gpu` extra
+- PyTorch with CUDA for the `gpu` extra
 
 ## Documentation
 
-`docs/API.md` holds a compact API reference covering fitting, diagnostics, LRT,
-and prediction intervals.
+[`docs/API.md`](https://github.com/ghiffahry/STMMLib/blob/main/docs/API.md)
+holds a compact API reference covering fitting, diagnostics, LRT, and
+prediction intervals.
 
 ## Limitations
 
 - EBP here means `E[mu | y]`, computed from posterior draws. It is not the
   Molina-Rao EBP, and its mean squared error is not implemented.
-- Spatial block cross-validation supports fixed effects only.
 - The Gaussian path is CPU only. Run it with `gpu="no"`.
 - Gaussian fits return a dict, Beta fits return an object. The two return types
   are not unified yet.
@@ -179,7 +183,7 @@ and prediction intervals.
   author  = {Ghiffary, Ghardapaty},
   title   = {STMMLib: spatio-temporal mixed models for areal panel data},
   year    = {2026},
-  version = {0.2.0},
+  version = {0.2.2},
   url     = {https://github.com/ghiffahry/STMMLib},
   license = {MIT}
 }
@@ -187,4 +191,4 @@ and prediction intervals.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/ghiffahry/STMMLib/blob/main/LICENSE).

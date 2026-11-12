@@ -3,6 +3,36 @@
 All notable changes to `stmmlib`. Format follows Keep-a-Changelog; versions
 follow Semantic Versioning.
 
+## [0.2.2] - 2026-11-13
+
+### Fixed
+
+- README claims now match the code:
+  - M7/M14 area effect is nested IID, not nested SAR. The Beta path says so
+    explicitly, and the Gaussian nested covariance does not use `W`.
+  - GPU acceleration is PyTorch-only and applies to the Beta inner solves;
+    the Gaussian path stays on CPU.
+  - Removed the spatial block cross-validation claim: the package does not
+    implement it.
+  - Holdout prediction is Beta-only (`ebp_newdata`), and that method rejects
+    nested and interaction models.
+  - The quick-start report call uses `summary(strict=True)` and describes the
+    certificate warning accurately.
+  - Citation version and LICENSE link now point at the current release and
+    absolute GitHub URLs, so they work on PyPI.
+
+### Changed
+
+- The `gpu` extra no longer pulls `cupy-cuda12x`; only the PyTorch path is
+  used for acceleration.
+- The sdist now ships `CHANGELOG.md` and `docs/API.md` through `MANIFEST.in`,
+  because the README references the API reference.
+- Added Documentation and Changelog project URLs to the package metadata.
+- The package docstring now describes the actual GPU path (PyTorch/CUDA for
+  the Beta inner solves).
+- License metadata now uses the SPDX expression `MIT` with
+  `setuptools>=77` and no deprecated license classifier.
+
 ## [0.2.1] - 2026-11-12
 
 ### Fixed
