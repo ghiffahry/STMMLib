@@ -33,6 +33,9 @@ depend on that dataset, and is published as a software reference.
 pip install stmmlib
 ```
 
+This installs NumPy, SciPy and pandas automatically. Nothing else has to be
+installed by hand.
+
 For the optional GPU backend:
 
 ```bash
@@ -47,11 +50,18 @@ cd STMMLib
 pip install -e .
 ```
 
-Run the test suite:
+Run the test suite. The tests ship with the source, not with the installed
+wheel, so this one needs a checkout:
 
 ```bash
 pip install -e ".[dev]"
 pytest
+```
+
+Check the installation:
+
+```bash
+python -c "import stmmlib as stmmlib; print(stmmlib.__version__)"
 ```
 
 ## Quick start

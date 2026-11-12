@@ -3,6 +3,17 @@
 All notable changes to `stmmlib`. Format follows Keep-a-Changelog; versions
 follow Semantic Versioning.
 
+## [0.2.1] - 2026-11-12
+
+### Changed
+
+- Installation section now states that `pip install stmmlib` pulls NumPy,
+  SciPy and pandas automatically, notes that the `dev` extra needs a source
+  checkout because the tests are not part of the wheel, and gives a
+  one-line verification command.
+- Version moved to 0.2.1 so a rebuild from this branch cannot collide with
+  the published 0.2.0 filenames on PyPI.
+
 ## [0.2.0] - 2026-11-11
 
 ### Added
