@@ -64,13 +64,14 @@ def get_theta_layout(model: dict) -> list[str]:
 
     Order: [area params] + [time params] + [interaction params].
     Area: sigma2_v (always), rho (if SAR).
-    Time: sigma2_u (if iid), sigma2_eta+phi (if AR1).
+    Time: sigma2_u (if iid), sigma2_eta+phi (if AR1). The AR(1) innovation
+    variance is sigma2_eta whether the time effect is global or area-specific;
+    build_V and build_G_time read that name.
     Interaction: sigma2_gamma, rho_gamma/phi_gamma as needed.
     """
     area = model.get("area_type", model.get("area", "iid"))
     time = model.get("time_type", model.get("time", "iid"))
     interaction = model.get("interaction", "none")
-    time_scope = model.get("time_scope", "area_specific")
 
     params = ["sigma2_e"]  # residual always first in layout
 
@@ -84,10 +85,7 @@ def get_theta_layout(model: dict) -> list[str]:
         params.append("sigma2_v")
 
     if time == "ar1":
-        if time_scope == "global":
-            params.append("sigma2_u")
-        else:
-            params.append("sigma2_eta")
+        params.append("sigma2_eta")
         params.append("phi")
     elif time == "iid":
         if area not in ("nested_iid", "nested_sar"):

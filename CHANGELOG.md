@@ -14,6 +14,11 @@ follow Semantic Versioning.
 
 ### Fixed
 
+- AR(1) models with `time_scope="global"` (M4, M11) exposed `sigma2_u` in the
+  parameter layout while `build_V` and `build_G_time` only read `sigma2_eta`.
+  The likelihood was invariant to the reported variance. The layout now always
+  uses `sigma2_eta` for AR(1), matching `stlmm5lib`. Results for M4 and M11
+  change.
 - M6 and M13 now estimate a separate IID time variance (`sigma2_time`). The
   time block used to reuse `sigma2_kab`, so the fitted model had one parameter
   fewer than the registry declares. This matches `stlmm5lib` in R. Results for
