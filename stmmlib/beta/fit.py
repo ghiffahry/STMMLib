@@ -163,8 +163,9 @@ def stmm_beta(
     """Fit a spatio-temporal Beta mixed model.
 
     Args:
-        formula: Formula string (currently unused; X from data columns
-                 minus the grouping/response columns).
+        formula: Not implemented. Ignored here; X is built from data columns
+                 minus the grouping/response columns. Public entry points
+                 reject a non-None value.
         data: pandas DataFrame. Response must be a proportion in (0,1).
         model: Model ID (e.g. "m1_iid_iid", "m3_sar_iid", "m5_seblup_rao_yu_it").
         W: Spatial weight matrix (scipy.sparse or numpy array).

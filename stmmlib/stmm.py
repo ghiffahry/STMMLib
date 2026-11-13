@@ -14,6 +14,15 @@ if TYPE_CHECKING:
     from stmmlib._backend import Backend
 
 
+def _reject_formula(formula) -> None:
+    """Fail loudly instead of silently ignoring an unimplemented formula."""
+    if formula is not None:
+        raise NotImplementedError(
+            "formula is not implemented. Predictors are built from every "
+            "column that is not the response or a grouping column. Pass "
+            "formula=None and remove unwanted predictor columns from data.")
+
+
 def stmm(
     formula: str = None,
     data: pd.DataFrame = None,
@@ -45,7 +54,8 @@ def stmm(
     SORTED order (pd.Categorical sorts categories before assigning codes).
 
     Args:
-        formula: Formula string (unused; X from data columns).
+        formula: must be None. Not implemented; X is built from every
+            non-skipped data column.
         data: pandas DataFrame.
         model: Model ID (e.g. "m4_sar_ar1" for Gaussian, "m1_iid_iid" for Beta).
         family: "gaussian" or "beta".
@@ -145,6 +155,7 @@ def stmm_normal(
     Pass explicit ``area_col``/``time_col`` (and optionally ``spatial``/
     ``temporal``/``prov_col``) when your data uses non-default names.
     """
+    _reject_formula(formula)
     from stmmlib.registry import MODELS
     from stmmlib._utils import interaction_parse
     from stmmlib._backend import Backend
@@ -255,6 +266,7 @@ def stmm_beta(
     Pass ``response_col``/``area_col``/``time_col`` to match your own
     column names instead of the conventional ``y``/``area``/``time``.
     """
+    _reject_formula(formula)
     from stmmlib.beta.fit import stmm_beta as _stmm_beta
     return _stmm_beta(formula, data, model, W, method=method, gpu=gpu,
                       n_starts=n_starts, preset=preset,

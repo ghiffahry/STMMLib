@@ -91,7 +91,8 @@ def stmm_normal_core(
     """Main core fitting engine for stLMM class (M1-M4).
 
     Args:
-        formula: Formula string (currently unused; X constructed from data cols).
+        formula: Not implemented. Ignored here; X is constructed from data
+            columns. The public ``stmm`` entry points reject non-None.
         data: pandas DataFrame.
         area: Area column name.
         time: Time column name.

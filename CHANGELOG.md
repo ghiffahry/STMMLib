@@ -3,6 +3,25 @@
 All notable changes to `stmmlib`. Format follows Keep-a-Changelog; versions
 follow Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- `formula` is now rejected with `NotImplementedError` at the public entry
+  points. It was accepted and silently ignored, so a caller could believe the
+  design matrix matched the formula while it contained every non-skipped
+  column.
+
+### Added
+
+- CI matrix for Python 3.10 to 3.14 on Linux plus Windows 3.12, and a build
+  job that runs `python -m build` and `twine check`.
+- Golden numeric tests for Beta IID+AR(1), Gaussian SAR+IID, and Gaussian
+  IID+AR(1), captured from 0.2.2.
+- Architecture tests: a file-size ratchet and a ban on cross-family imports.
+- An xfail test documenting that M6 declares a separate time variance while
+  the implementation has no `sigma2_eta` parameter.
+
 ## [0.2.2] - 2026-11-13
 
 ### Fixed
