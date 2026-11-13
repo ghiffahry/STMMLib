@@ -26,6 +26,12 @@ follow Semantic Versioning.
 
 ### Added
 
+- Parametric bootstrap MSE of the area-level predictor: `mse_ebp(fit)` for
+  Beta and `mse_eblup(fit)` for Gaussian, in `stmmlib/mse_bootstrap.py`.
+  Single layer by design: beta and theta are fixed while generating, the
+  refit re-estimates them, and the target is the realized area mean of the
+  drawn random effects. No second-order bias correction (see the design doc
+  and the thesis method section). Flat models only in v1.
 - CI matrix for Python 3.10 to 3.14 on Linux plus Windows 3.12, and a build
   job that runs `python -m build` and `twine check`.
 - Golden numeric tests for Beta IID+AR(1), Gaussian SAR+IID, and Gaussian
