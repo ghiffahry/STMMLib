@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stmmlib"
-version = "0.2.2"
+version = "0.2.3"
 description = "Family-aware spatio-temporal mixed models (Gaussian + Beta) with optional GPU acceleration"
 readme = "README.md"
 license = "MIT"

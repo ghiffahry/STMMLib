@@ -5,6 +5,8 @@ follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-13
+
 ### Changed
 
 - `formula` is now rejected with `NotImplementedError` at the public entry
