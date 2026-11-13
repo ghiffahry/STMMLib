@@ -14,9 +14,10 @@ follow Semantic Versioning.
 
 ### Fixed
 
-- M6 and M13 now estimate a separate IID time variance (`sigma2_u`). The time
-  block used to reuse `sigma2_kab`, so the fitted model had one parameter fewer
-  than the registry declares. Results for M6 and M13 change.
+- M6 and M13 now estimate a separate IID time variance (`sigma2_time`). The
+  time block used to reuse `sigma2_kab`, so the fitted model had one parameter
+  fewer than the registry declares. This matches `stlmm5lib` in R. Results for
+  M6 and M13 change.
 
 ### Added
 

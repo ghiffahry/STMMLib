@@ -207,7 +207,7 @@ def _nested_henderson_blup(theta, y, X, prepared, interaction, beta_hat,
         G_t = _to_np_backend(backend, G_ar1_core(
             T, theta.get("sigma2_eta", 0.0), theta.get("phi", 0.0), backend))
     else:
-        G_t = theta.get("sigma2_u", 1.0) * np.eye(T, dtype=np.float64)
+        G_t = theta.get("sigma2_time", 1.0) * np.eye(T, dtype=np.float64)
     if Z_cell is not None:
         G_cell_full = np.kron(np.eye(n_kab, dtype=np.float64), G_t)
         u_it = G_cell_full @ (Z_cell.T @ w)

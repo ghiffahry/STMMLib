@@ -532,7 +532,7 @@ def build_V_nested(
     V_kab = _to_np_backend(backend, Z_kab) @ _to_np_backend(backend, G_kab) @ _to_np_backend(backend, Z_kab).T
 
     # Time is IID for nested_iid_iid
-    G_t = theta.get("sigma2_u", 1.0) * xp.eye(T, dtype=xp.float64)
+    G_t = theta.get("sigma2_time", 1.0) * xp.eye(T, dtype=xp.float64)
     V_cell = _nested_cell_v(prepared, G_t, n_kab, T, n, backend)
     if backend.is_sparse(V_cell):
         V_cell = V_cell.toarray()

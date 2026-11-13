@@ -22,7 +22,7 @@ def test_nested_iid_layout_matches_registry(model_id):
     spec = get_model_spec(model_id)
     layout = nested_layout(spec.interaction)
     assert len(layout) == spec.n_params_normal
-    assert "sigma2_u" in layout
+    assert "sigma2_time" in layout
 
 
 def test_gaussian_nested_time_variance_is_free():
@@ -39,7 +39,7 @@ def test_gaussian_nested_time_variance_is_free():
                                   prov_col="prov", kab_col="kab")
     prepared.update(build_Z_nested(prepared, backend))
     theta = {"sigma2_e": 0.0, "sigma2_prov": 0.0, "sigma2_kab": 0.0,
-             "sigma2_u": 1.0}
+             "sigma2_time": 1.0}
     V = build_V_nested(prepared, theta, "none", backend)
     assert np.allclose(V, np.eye(prepared["n"]))
 
