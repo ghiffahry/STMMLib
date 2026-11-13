@@ -10,7 +10,7 @@ from stmmlib.registry import (
     stmm_parse_model,
 )
 from stmmlib.stmm import stmm, stmm_normal, stmm_beta
-from stmmlib.output_format import format_output
+from stmmlib.reporting import format_output
 from stmmlib._backend import Backend
 
 try:  # single source of truth for the version: the installed package metadata

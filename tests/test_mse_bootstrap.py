@@ -55,7 +55,7 @@ def test_mse_ebp_rejects_interaction():
 
 
 def test_mse_ebp_low_success_rate_raises(df_flat, monkeypatch):
-    import stmmlib.mse_bootstrap as mb
+    import stmmlib.mse.bootstrap as mb
 
     def _boom(*args, **kwargs):
         raise ValueError("forced failure")
@@ -93,7 +93,7 @@ def test_mse_eblup_rejects_nested():
 
 
 def test_mse_eblup_low_success_rate_raises(df_gauss, monkeypatch):
-    import stmmlib.mse_bootstrap as mb
+    import stmmlib.mse.bootstrap as mb
 
     def _boom(*args, **kwargs):
         raise ValueError("forced failure")

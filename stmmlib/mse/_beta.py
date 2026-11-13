@@ -8,7 +8,7 @@ from scipy.linalg import solve_triangular
 from stmmlib._backend import Backend
 from stmmlib.beta.precision import ar1_precision
 from stmmlib.beta.solvers import beta_laplace_structural
-from stmmlib._mse_common import (
+from stmmlib.mse._common import (
     _N_DRAWS, _draw_from_precision, _invlogit, _row_means, _to_np,
 )
 

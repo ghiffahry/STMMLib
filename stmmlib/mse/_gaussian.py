@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from stmmlib._backend import Backend
-from stmmlib._mse_common import _draw_mvn, _onehot, _to_np
+from stmmlib.mse._common import _draw_mvn, _onehot, _to_np
 
 
 def gaussian_model_id(model):

@@ -5,6 +5,15 @@ follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Packaging layout only, no behavior change. Output formatting moved into
+  `stmmlib.reporting` (`_common`, `beta`, `normal`) and the MSE bootstrap into
+  `stmmlib.mse` (`_common`, `_beta`, `_gaussian`, `bootstrap`). The flat
+  `stmmlib.output_format*` modules and `stmmlib.mse_bootstrap` remain as
+  compatibility shims, so existing imports keep working. Stale `__pycache__`
+  directories were removed from the source tree.
+
 ## [0.2.3] - 2026-11-13
 
 ### Changed

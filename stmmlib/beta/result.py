@@ -627,7 +627,7 @@ class BetastmmResult:
         strict=True hides the Wald inference (z, p and the interval) when
         the convergence certificate says the fit is not inference-grade.
         """
-        from stmmlib.output_format import format_output
+        from stmmlib.reporting import format_output
         return format_output(self, width=width, strict=strict)
 
     def summary_dict(self) -> dict:

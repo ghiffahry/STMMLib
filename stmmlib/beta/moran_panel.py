@@ -21,7 +21,7 @@ import numpy as np
 from scipy import stats
 
 from stmmlib.beta.structure import stmm_beta_structure
-from stmmlib.output_format import _sig
+from stmmlib.reporting._common import _sig
 
 # ---------------------------------------------------------------------------
 # BAGIAN 0: konstanta default

@@ -267,11 +267,11 @@ def latex_model_table(tab: pd.DataFrame, caption: str = "", label: str = "") -> 
 
 def print_stlmm(x: dict):
     """One-line print for a stLMM object."""
-    from stmmlib.output_format import format_output
+    from stmmlib.reporting import format_output
     print(format_output(x))
 
 
 def print_summary_stlmm(x: dict, digits: int = 4):
     """Pretty-print full summary for a stLMM result."""
-    from stmmlib.output_format import format_output
+    from stmmlib.reporting import format_output
     print(format_output(x))
