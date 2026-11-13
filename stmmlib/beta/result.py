@@ -246,7 +246,7 @@ class BetastmmResult:
                                   phi_bound=_pb) \
                 if (s["time"] == "ar1" and len(raw) > (1 if s["area"] in ("sar", "seblup_rao_yu") else 0)) else 0.0
             is_nested = "prov" in blocks
-            _eta_i = 2 if (is_nested and s["time"] == "ar1") else 1
+            _eta_i = 2 if is_nested else 1
             s2t = float(np.exp(2 * logs[_eta_i])) if len(logs) > _eta_i else 0.0
             s2g = float(np.exp(2 * logs[-1])) if (len(blocks.get("interaction", [])) and len(logs) >= 3) else 0.0
             cell_var = s2t / max(1 - phi_t ** 2, 1e-6) if s["time"] == "ar1" else s2t
@@ -562,8 +562,8 @@ class BetastmmResult:
                 "scope": s.get("time_scope", ""),
             }
         else:
-            sig_t2 = np.exp(2.0 * logs[1]) if len(logs) > 1 else 1.0
-            out["time"] = {"type": "IID", "sigma^2": float(sig_t2)}
+            _t_i = 2 if is_nested else 1
+            out["time"] = {"type": "IID", "sigma^2": float(np.exp(2.0 * logs[_t_i]) if len(logs) > _t_i else 1.0)}
         n_gamma = len(blocks.get("interaction", []))
         if n_gamma > 0:
             itype = s.get("interaction", "none")

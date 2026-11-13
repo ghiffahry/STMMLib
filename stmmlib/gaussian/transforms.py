@@ -370,7 +370,7 @@ def seblup5_raw_to_theta(raw, interaction, area_type, corr_bound=CORR_BOUND_DEFA
 
 
 def nested_layout(interaction: str) -> list[str]:
-    params = ["sigma2_e", "sigma2_prov", "sigma2_kab"]
+    params = ["sigma2_e", "sigma2_prov", "sigma2_kab", "sigma2_u"]
     params.extend(interaction_param_names(interaction))
     return params
 

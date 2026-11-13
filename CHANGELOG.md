@@ -12,6 +12,12 @@ follow Semantic Versioning.
   design matrix matched the formula while it contained every non-skipped
   column.
 
+### Fixed
+
+- M6 and M13 now estimate a separate IID time variance (`sigma2_u`). The time
+  block used to reuse `sigma2_kab`, so the fitted model had one parameter fewer
+  than the registry declares. Results for M6 and M13 change.
+
 ### Added
 
 - CI matrix for Python 3.10 to 3.14 on Linux plus Windows 3.12, and a build
@@ -19,8 +25,6 @@ follow Semantic Versioning.
 - Golden numeric tests for Beta IID+AR(1), Gaussian SAR+IID, and Gaussian
   IID+AR(1), captured from 0.2.2.
 - Architecture tests: a file-size ratchet and a ban on cross-family imports.
-- An xfail test documenting that M6 declares a separate time variance while
-  the implementation has no `sigma2_eta` parameter.
 
 ## [0.2.2] - 2026-11-13
 

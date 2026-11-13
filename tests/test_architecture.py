@@ -25,7 +25,7 @@ BASELINE = {
     "beta/lrt_fixed.py": 551,
     "gaussian/models.py": 529,
     "gaussian/transforms.py": 419,
-    "beta/inference.py": 403,
+    "beta/inference.py": 402,
     "beta/report.py": 373,
     "gaussian/optimization.py": 361,
     "beta/simulation.py": 343,

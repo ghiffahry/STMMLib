@@ -837,8 +837,8 @@ def beta_laplace_structural(
     _rho_i = 0 if _has_sar else None
     _ph_i = (1 if _has_sar else 0) if _has_ar1 else None
 
-    # Variance components: flat = [area, time]; nested = [prov, kab] (+eta if ar1)
-    ksd = 2 + (1 if (is_nested and _has_ar1) else 0)
+    # Variance components: flat = [area, time]; nested = [prov, kab, time]
+    ksd = 3 if is_nested else 2
     # Interaction adds one variance component (log_sigma_gamma)
     if n_gamma > 0:
         ksd += 1
@@ -848,8 +848,8 @@ def beta_laplace_structural(
         blocks_Q = []
 
         if is_nested:
-            # Nested hierarchy: [prov, kab, cell]; cell time shares kab variance
-            # for iid time (B9) and uses its own eta variance for AR(1) time.
+            # Nested hierarchy: [prov, kab, cell]; cell time has its own
+            # variance for both IID and AR(1) time.
             blocks_Q.append(np.exp(-2.0 * logs[0]) * np.eye(n_prov, dtype=np.float64))
             blocks_Q.append(np.exp(-2.0 * logs[1]) * np.eye(n_kab, dtype=np.float64))
             if _has_ar1:
@@ -860,7 +860,7 @@ def beta_laplace_structural(
                     TQ = TQ.toarray()
                 blocks_Q.append(_block_diag_dense([TQ] * n_kab))
             else:
-                blocks_Q.append(np.exp(-2.0 * logs[1]) * np.eye(n_cell, dtype=np.float64))
+                blocks_Q.append(np.exp(-2.0 * logs[2]) * np.eye(n_cell, dtype=np.float64))
         else:
             # Area
             if s["area"] in ("iid",):
@@ -1594,8 +1594,8 @@ def beta_laplace_structural(
 
     phi_hat = np.exp(logphi_hat)
     sigma_area = np.exp(logs_hat[0]) if ksd > 0 else 1.0
-    sigma_time = np.exp(logs_hat[1]) if ksd > 1 else 1.0
-    sigma_gamma = np.exp(logs_hat[2]) if (n_gamma > 0 and ksd > 2) else None
+    sigma_time = np.exp(logs_hat[2 if is_nested else 1]) if ksd > (2 if is_nested else 1) else 1.0
+    sigma_gamma = np.exp(logs_hat[ksd - 1]) if n_gamma > 0 else None
 
     log_lik = -best_val
     k_total = param_dim

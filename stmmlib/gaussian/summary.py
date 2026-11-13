@@ -166,7 +166,7 @@ def random_table_nested(fit: dict) -> pd.DataFrame:
     """Random effects table for nested class."""
     theta = fit.get("theta", {})
     rows = []
-    for key in ("sigma2_prov", "sigma2_kab", "sigma2_e"):
+    for key in ("sigma2_prov", "sigma2_kab", "sigma2_u", "sigma2_e"):
         if key in theta:
             rows.append({"Group": key, "Variance": theta[key]})
     return pd.DataFrame(rows) if rows else pd.DataFrame()

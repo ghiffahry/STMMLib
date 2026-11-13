@@ -130,11 +130,11 @@ def _inference_labels(optim_results: dict, raw_dep, ksd: int, p: int) -> list:
     _s = stmm_beta_structure(optim_results["model"])
     _is_nested = "prov" in optim_results.get("des", {}).get("blocks", {})
     # Sigma labels by role: flat = [area, time, (gamma)];
-    # nested = [prov, kab, (eta if ar1), (gamma)]
+    # nested = [prov, kab, time, (gamma)]
     _sig_names = (["log_sigma_prov", "log_sigma_kab"]
                   if _is_nested else ["log_sigma_area", "log_sigma_time"])
-    if _is_nested and _s["time"] == "ar1":
-        _sig_names.append("log_sigma_eta")
+    if _is_nested:
+        _sig_names.append("log_sigma_eta" if _s["time"] == "ar1" else "log_sigma_time")
     if ksd > len(_sig_names):
         _sig_names.append("log_sigma_gamma")
     labels += _sig_names
@@ -295,8 +295,7 @@ def _neg_loglik_for_hessian(param_vec: np.ndarray, optim_results: dict) -> float
     from scipy.sparse import block_diag as _sp_blkdiag
     blocks_Q = []
     if is_nested:
-        # Nested hierarchy: [prov, kab, cell]; cell time shares kab variance
-        # for iid time (B9) and uses its own eta variance for AR(1) time.
+        # Nested hierarchy: [prov, kab, cell]; each level has its own variance.
         n_prov = len(blocks.get("prov", []))
         n_kab = len(blocks.get("kab", []))
         n_cell = len(blocks.get("cell", []))
@@ -309,7 +308,7 @@ def _neg_loglik_for_hessian(param_vec: np.ndarray, optim_results: dict) -> float
                 TQ = TQ.toarray()
             blocks_Q.append(_sp_blkdiag([TQ] * n_kab, format="csr").toarray())
         else:
-            blocks_Q.append(np.exp(-2.0 * logs[1]) * np.eye(n_cell, dtype=np.float64))
+            blocks_Q.append(np.exp(-2.0 * logs[2]) * np.eye(n_cell, dtype=np.float64))
         Q_base = np.asarray(_sp_blkdiag(blocks_Q, format="csr").toarray())
     else:
         if s["area"] in ("iid",):
