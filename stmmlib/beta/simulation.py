@@ -52,8 +52,8 @@ def _gamma_re(interaction: str, m: int, T: int, sigma_gamma: float,
     G built on the CONTRAST coordinates (same B as design._build_Z_gamma).
     The AR(1) factor uses the innovation-variance convention of the fit
     (G_AR1 = R(phi)/(1-phi^2)), matching beta_Q_gamma:
-      iid:      kron(I_T, I_m1)
-      spatial:  kron(I_T, B'A'AB),  A = I - rho_g W
+      iid:      kron(I_m1, I_T)
+      spatial:  kron(B'A'AB, I_T),  A = I - rho_g W
       temporal: kron(I_m, B'ArB),   Ar = R(phi_g)/(1-phi_g^2)
       st:       kron(B'A'AB, B'ArB)
     Returns (gamma vector [n_gamma], Z_gamma matrix [n x n_gamma]).
@@ -91,7 +91,8 @@ def _gamma_re(interaction: str, m: int, T: int, sigma_gamma: float,
         A = np.eye(m, dtype=np.float64) - rho_gamma * W_arr
         La = _chol(B_area.T @ (A.T @ A) @ B_area)
         if interaction == "spatial":
-            L = np.kron(np.eye(T), La)
+            # gamma is area-contrast-major (Z_gamma = Z_full @ kron(B, I_T)).
+            L = np.kron(La, np.eye(T))
         else:
             Ar = _ar1_corr(T, phi_gamma) / (1.0 - phi_gamma ** 2)
             Lt = _chol(B_time.T @ Ar @ B_time)

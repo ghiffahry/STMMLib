@@ -70,7 +70,10 @@ class BetastmmResult:
         standardized as (col-mean)/sd):
             beta_orig[j+1] = beta_std[j+1] / sd
             beta_orig[0]   = beta_std[0] - sum_j beta_std[j+1] * (mean/sd)
-            se_orig[j+1]   = se_std[j+1] / sd   (intercept SE left as-is)
+        SEs follow the same linear map: V_orig = D V_std D' with
+        D[0, j+1] = -mean/sd and D[j+1, j+1] = 1/sd, so the intercept SE
+        includes the predictor covariances. Without a vcov only the diagonal
+        is propagated (independence fallback).
         Returns (beta_orig, se_orig).
         """
         p = self._opt["p"]
@@ -83,13 +86,22 @@ class BetastmmResult:
             return beta_std.copy(), se_std.copy()
         beta_orig = beta_std.copy()
         se_orig = se_std.copy()
+        D = np.eye(p)
         for j, c in enumerate(x_cols):
             mn, sd = x_scale.get(c, (0.0, 1.0))
             if sd <= 1e-12:
                 continue
             beta_orig[j + 1] = beta_std[j + 1] / sd
-            se_orig[j + 1] = se_std[j + 1] / sd
             beta_orig[0] -= beta_std[j + 1] * (mn / sd)
+            D[j + 1, j + 1] = 1.0 / sd
+            D[0, j + 1] = -mn / sd
+        V = self._inf.get("vcov")
+        if V is not None and np.asarray(V).shape[0] >= p:
+            Vb = D @ np.asarray(V, dtype=float)[:p, :p] @ D.T
+            se_orig = np.sqrt(np.clip(np.diag(Vb), 0.0, None))
+        else:
+            se_orig[0] = np.sqrt(
+                se_std[0] ** 2 + np.sum((D[0, 1:] * se_std[1:]) ** 2))
         return beta_orig, se_orig
 
     @property
@@ -225,12 +237,16 @@ class BetastmmResult:
         eta = X @ beta + (Zr @ b_hat if use_random else 0.0)
         mu = np.clip(1.0 / (1.0 + np.exp(-eta)), 1e-12, 1 - 1e-12)
 
-        # fixed part
+        # fixed part: without vcov there is no honest interval; an all-zero
+        # Vb silently reported the random part as if it were the whole story.
         inf = getattr(self, "inference", None) or {}
         V = inf.get("vcov")
+        if V is None:
+            raise ValueError(
+                "predict_interval needs the fitted vcov (Hessian SEs); "
+                "refit with compute_hessian=True or a preset that computes it.")
         p = len(beta)
-        Vb = np.asarray(V[:p, :p], float) if V is not None \
-            else np.zeros((p, p))
+        Vb = np.asarray(V[:p, :p], float)
         var_fixed = np.einsum("ij,jk,ik->i", X, Vb, X)
 
         # random part: prior variance per column of Z, by block

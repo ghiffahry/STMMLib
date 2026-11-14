@@ -225,8 +225,9 @@ def build_G_interaction(
         qa = B_area.T @ AtA @ B_area
         if not is_pd(qa, backend):
             qa = near_pd(qa, backend)
-        n_gamma_a = m - 1
-        return sigma2_gamma * backend.sparse_kron(I_T, qa, format="csr")
+        # Z_gamma = Z_full @ kron(B_area, I_T) is area-major, so the prior
+        # must be kron(qa, I_T); kron(I_T, qa) permutes area and time.
+        return sigma2_gamma * backend.sparse_kron(qa, I_T, format="csr")
 
     if itype == "temporal":
         # qt = B_time' G_AR1 B_time with G_AR1 = (1/(1-phi^2)) R(phi),
@@ -333,17 +334,24 @@ def build_V(
     Ga = _to_np_backend(backend, G_a)
     ZGZ_area = Za @ Ga @ Za.T
 
-    # Time block: Z_cell G_cell Z_cell' with G_cell = kron(I_m, G_t).
-    # Z_cell is built from observed (area, time) indices, so this is valid for
+    # Time block. Global scope: one effect per period, V = Z_time G_t Z_time'.
+    # Area-specific scope: Z_cell G_cell Z_cell' with G_cell = kron(I_m, G_t).
+    # Z_cell is built from observed (area, time) indices, so it is valid for
     # any n (replicated observations per cell), not just n = m*T (fixes B6).
     G_t = build_G_time(time_type, T, sigma2_u, sigma2_eta, phi, backend)
     G_t = _to_np_backend(backend, G_t)
-    _cell_idx = np.asarray(data["area_index"], dtype=np.int64) * T \
-        + np.asarray(data["time_index"], dtype=np.int64)
-    _Zc = np.zeros((n, m * T), dtype=np.float64)
-    _Zc[np.arange(n), _cell_idx] = 1.0
-    _G_cell = np.kron(np.eye(m, dtype=np.float64), G_t)
-    V_time = _Zc @ _G_cell @ _Zc.T
+    if model.get("time_scope", "area_specific") == "global":
+        if Z_time is None:
+            raise ValueError("Global time scope requires Z_time in prepared data.")
+        Zt = _to_np_backend(backend, Z_time)
+        V_time = Zt @ G_t @ Zt.T
+    else:
+        _cell_idx = np.asarray(data["area_index"], dtype=np.int64) * T \
+            + np.asarray(data["time_index"], dtype=np.int64)
+        _Zc = np.zeros((n, m * T), dtype=np.float64)
+        _Zc[np.arange(n), _cell_idx] = 1.0
+        _G_cell = np.kron(np.eye(m, dtype=np.float64), G_t)
+        V_time = _Zc @ _G_cell @ _Zc.T
 
     # Interaction block
     from stmmlib._utils import interaction_active

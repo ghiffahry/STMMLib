@@ -92,79 +92,19 @@ def beta_criteria(fit, W=None):
         # Area spectral bound (NOT the gamma bound) for the SAR display mapping
         rb = des.get("rho_bound", des.get("rho_bound_g", 0.95))
 
-        blocks_Q = []
-        if s["area"] in ("iid",):
-            Q_a = np.exp(-2.0 * logs[0]) * np.eye(n_area)
-        elif s["area"] in ("sar", "nested_sar", "seblup_rao_yu"):
-            rho = rb * np.tanh(raw_dep[0]) if len(raw_dep) > 0 else 0.0
-            # BUG-B4 fix: explicit W argument wins; opt["W"] may be None even
-            # when the key exists (old expression silently ignored use_W).
-            W_arr = W if W is not None else opt.get("W")
-            if W_arr is None:
-                W_arr = des.get("W_gamma")
-            if W_arr is None:
-                W_arr = np.eye(n_area)
-            elif hasattr(W_arr, "toarray"):
-                W_arr = W_arr.toarray()
-            W_arr = np.asarray(W_arr, dtype=float)[:n_area, :n_area]
-            A = np.eye(n_area) - rho * W_arr
-            Q_a = np.exp(-2.0 * logs[0]) * (A.T @ A)
-        else:
-            Q_a = np.eye(n_area)
-        blocks_Q.append(Q_a)
-
-        area_specific = s.get("time_scope") == "area_specific"
-        if s["time"] == "ar1" and n_time > 0:
-            # Frozen model mapping: ar1_precision squashes phi_t again
-            # (pb*tanh(pb*tanh(raw))); keep the tridiagonal form here.
-            pb = des.get("phi_bound", 0.95)
-            phi_t = pb * np.tanh(raw_dep[1]) if len(raw_dep) > 1 else 0.0
-            sigma2_inv = np.exp(-2.0 * (logs[1] if len(logs) > 1 else 0.0))
-            if area_specific:
-                from stmmlib.beta.precision import ar1_precision as _ar1p
-                from stmmlib._backend import Backend as _B
-                from scipy.sparse import block_diag as _spbd
-                T_loc = int(des.get("T", len(blocks.get("time", []))))
-                TQ = _ar1p(max(T_loc, 1), logs[1] if len(logs) > 1 else 0.0, phi_t, _B(gpu=False),
-                           phi_bound=pb)
-                if hasattr(TQ, "toarray"):
-                    TQ = TQ.toarray()
-                Q_t = _spbd([TQ] * n_area, format="csr").toarray()
-            else:
-                di = np.full(n_time, 1.0 + phi_t ** 2)
-                di[0] = di[-1] = 1.0
-                Q_t = sigma2_inv * (np.diag(di)
-                                    + np.diag(np.full(n_time - 1, -phi_t), 1)
-                                    + np.diag(np.full(n_time - 1, -phi_t), -1))
-            blocks_Q.append(Q_t)
-        elif n_time > 0:
-            Q_t = np.exp(-2.0 * logs[1]) * np.eye(n_time) if len(logs) > 1 else np.eye(n_time)
-            blocks_Q.append(Q_t)
-
-        from scipy.sparse import block_diag as _spblockdiag
-        Q_base = _spblockdiag(blocks_Q)
-        if hasattr(Q_base, "toarray"):
-            Q_base = Q_base.toarray()
-
-        n_gamma = len(blocks.get("interaction", []))
-        if n_gamma > 0:
-            # Same Q_g the fit uses (shared helper): the diagonal shortcut here
-            # was wrong whenever rho_gamma/phi_gamma were nonzero (M9-M12).
-            from stmmlib._backend import Backend
-            from stmmlib.beta.solvers import beta_Q_gamma
-            Q_g = beta_Q_gamma(
-                s, des, int(des.get("m", n_area)), int(des.get("T", n_time)),
-                n_gamma, logs, raw_dep, len(logs), len(raw_dep),
-                s["area"] in ("sar", "seblup_rao_yu"),
-                s["time"] == "ar1", Backend(gpu=False))
-            if Q_g is not None and Q_g.size > 0:
-                Q_full = np.block([
-                    [Q_base, np.zeros((Q_base.shape[0], n_gamma))],
-                    [np.zeros((n_gamma, Q_base.shape[0])), Q_g]])
-            else:
-                Q_full = Q_base
-        else:
-            Q_full = Q_base
+        # Same Q the fit engine uses: one shared builder, not a copy.
+        W_eff = W if W is not None else opt.get("W")
+        if W_eff is None:
+            W_eff = des.get("W_gamma")
+        from stmmlib._backend import Backend
+        from stmmlib.beta.prior import build_beta_Q
+        Q_full = build_beta_Q(
+            s, des, W_eff, logs, raw_dep,
+            int(opt.get("ksd", len(logs))), int(opt.get("q_dep", len(raw_dep))),
+            rho_bound=rb, phi_bound=des.get("phi_bound", 0.95),
+            backend=Backend(gpu=False),
+            use_blocked=(s["interaction"] == "none"
+                         and s.get("time_scope") == "area_specific"))
 
         q = Z.shape[1]
         if Q_full.shape[0] != q:

@@ -144,11 +144,14 @@ def stmm_normal_core(
     _skip = {area, time, y_col, prov_col or "prov", kab_col or "kab"}
     x_cols = [c for c in data.columns if c not in _skip]
     _warn_unused_conventional_columns(data, x_cols)
-    if y_col in data.columns:
-        y = data[y_col].values.astype(np.float64)
+    # Read y/X from the SORTED frame: prepared indices and Z refer to it, so
+    # using the original row order silently mixed observations with design rows.
+    fit_data = prepared["data"]
+    if y_col in fit_data.columns:
+        y = fit_data[y_col].values.astype(np.float64)
     else:
         raise ValueError(f"Data must contain response column {y_col!r}.")
-    X = np.column_stack([np.ones(n)] + [data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
+    X = np.column_stack([np.ones(n)] + [fit_data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
 
     # Build Z for interaction
     interaction_data = build_interaction_matrices(
@@ -322,14 +325,15 @@ def seblup_rao_yu_it(
     prepared["Z_gamma"] = interaction_data["Z_gamma"]
     n = prepared["n"]
 
-    y = data[response_col].values.astype(np.float64)
+    fit_data = prepared["data"]  # sorted: row i matches Z/indices row i
+    y = fit_data[response_col].values.astype(np.float64)
     # The response is skipped under its own name: with the literal "y" the
     # response became its own predictor whenever response_col was something
     # else (a silently wrong model).
     _skip = {area, time, response_col or "y", "prov", "kab"}
     x_cols = [c for c in data.columns if c not in _skip]
     _warn_unused_conventional_columns(data, x_cols)
-    X = np.column_stack([np.ones(n)] + [data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
+    X = np.column_stack([np.ones(n)] + [fit_data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
 
     opt = fit_seblup5(y, X, prepared, interaction, area_type, backend,
                       method=method, start=start, n_starts=n_starts, verbose=verbose)
@@ -409,12 +413,13 @@ def nested_iid_iid(
     model = make_model("nested_iid", "iid", interaction, time_scope)
     n = prepared["n"]
 
-    y = data[response_col].values.astype(np.float64)
+    fit_data = prepared["data"]  # sorted: row i matches Z/indices row i
+    y = fit_data[response_col].values.astype(np.float64)
     # Skip the columns this fit actually uses; the response under its own
     # name, so it can never become its own predictor.
     _skip = {c for c in (area, time, prov, kab, response_col or "y") if c}
     x_cols = [c for c in data.columns if c not in _skip]
-    X = np.column_stack([np.ones(n)] + [data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
+    X = np.column_stack([np.ones(n)] + [fit_data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
 
     # Build nested Z matrices
     from stmmlib.gaussian.design import build_Z_nested, build_interaction_matrices
@@ -478,12 +483,13 @@ def nested_iid_ar1(
     model = make_model("nested_sar", "ar1", interaction, time_scope)
     n = prepared["n"]
 
-    y = data[response_col].values.astype(np.float64)
+    fit_data = prepared["data"]  # sorted: row i matches Z/indices row i
+    y = fit_data[response_col].values.astype(np.float64)
     # Skip the columns this fit actually uses; the response under its own
     # name, so it can never become its own predictor.
     _skip = {c for c in (area, time, prov, kab, response_col or "y") if c}
     x_cols = [c for c in data.columns if c not in _skip]
-    X = np.column_stack([np.ones(n)] + [data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
+    X = np.column_stack([np.ones(n)] + [fit_data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)
 
     from stmmlib.gaussian.design import build_Z_nested, build_interaction_matrices
     nested_des = build_Z_nested(prepared, backend)

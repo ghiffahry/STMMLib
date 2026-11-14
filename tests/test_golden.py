@@ -88,7 +88,7 @@ def test_golden_beta_m2():
     fe = fit.fixef()
     _close(float(fe["(Intercept)"]), -1.0026732286577897)
     _close(float(fe["x1"]), 0.535643298237001)
-    _close(float(fit.se_original[0]), 0.17848350449413694, rel=1e-4)
+    _close(float(fit.se_original[0]), 0.17891076274311982, rel=1e-4)
     _close(float(fit.se_original[1]), 0.0937823810468137, rel=1e-4)
     _close(float(fit.phi), 22.638198402404793, rel=1e-3)
     _close(float(fit.log_lik), 41.189261875923435, rel=1e-6)

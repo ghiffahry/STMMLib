@@ -155,15 +155,18 @@ def compute_hessian_se(
     # Symmetrize
     H_raw = 0.5 * (H_raw + H_raw.T)
 
-    # Check PD
+    # The log-likelihood Hessian is negative definite at a maximum; the
+    # covariance of theta is the inverse of its NEGATION. Testing H_raw for
+    # PD (the old code) rejected every healthy fit and returned zero SEs.
     from stmmlib._utils import is_pd, near_pd
 
-    if is_pd(H_raw, backend=None):
-        H_inv = np.linalg.inv(H_raw)
+    H_neg = -H_raw
+    if is_pd(H_neg, backend):
+        H_inv = np.linalg.inv(H_neg)
     else:
-        warnings.warn("Hessian not PD, using near_pd projection.")
-        H_pd = near_pd(H_raw, backend=None)
-        H_inv = np.linalg.inv(H_pd)
+        warnings.warn("Hessian of log-likelihood not negative definite, "
+                      "using near_pd projection.")
+        H_inv = np.linalg.inv(near_pd(H_neg, backend))
 
     se_raw = np.sqrt(np.clip(np.diag(H_inv), 0, None))
     se_theta = delta_se(theta_hat, H_inv, model)

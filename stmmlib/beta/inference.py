@@ -283,78 +283,17 @@ def _neg_loglik_for_hessian(param_vec: np.ndarray, optim_results: dict) -> float
     rb = des.get("rho_bound", des.get("rho_bound_g", 0.95))
     _pb = des.get("phi_bound", 0.95)
     from stmmlib._backend import Backend
+    from stmmlib.beta.prior import build_beta_Q
     backend = Backend(gpu=False)
 
-    _has_sar = s["area"] in ("sar", "seblup_rao_yu")
-    _has_ar1 = s["time"] == "ar1"
     is_nested = "prov" in blocks
-    _raw_len = len(raw_dep)
-    _rho_i = 0 if _has_sar else None
-    _ph_i = (1 if _has_sar else 0) if _has_ar1 else None
-
-    from scipy.sparse import block_diag as _sp_blkdiag
-    blocks_Q = []
-    if is_nested:
-        # Nested hierarchy: [prov, kab, cell]; each level has its own variance.
-        n_prov = len(blocks.get("prov", []))
-        n_kab = len(blocks.get("kab", []))
-        n_cell = len(blocks.get("cell", []))
-        blocks_Q.append(np.exp(-2.0 * logs[0]) * np.eye(n_prov, dtype=np.float64))
-        blocks_Q.append(np.exp(-2.0 * logs[1]) * np.eye(n_kab, dtype=np.float64))
-        if _has_ar1:
-            ph = _pb * np.tanh(raw_dep[_ph_i]) if _raw_len > _ph_i else 0.0
-            TQ = ar1_precision(des["T"], logs[2], ph, backend, phi_bound=_pb)
-            if hasattr(TQ, 'toarray'):
-                TQ = TQ.toarray()
-            blocks_Q.append(_sp_blkdiag([TQ] * n_kab, format="csr").toarray())
-        else:
-            blocks_Q.append(np.exp(-2.0 * logs[2]) * np.eye(n_cell, dtype=np.float64))
-        Q_base = np.asarray(_sp_blkdiag(blocks_Q, format="csr").toarray())
-    else:
-        if s["area"] in ("iid",):
-            Q_a = np.exp(-2.0 * logs[0]) * np.eye(n_area, dtype=np.float64)
-        elif _has_sar:
-            rho = rb * np.tanh(raw_dep[_rho_i]) if _raw_len > _rho_i else 0.0
-            W = optim_results.get("W")
-            if W is None:
-                W = des.get("W_gamma")
-            if W is None:
-                W = np.eye(n_area, dtype=np.float64)
-            elif hasattr(W, 'toarray'):
-                W = W.toarray()
-            A = np.eye(n_area, dtype=np.float64) - rho * np.asarray(W, dtype=np.float64)[:n_area, :n_area]
-            Q_a = np.exp(-2.0 * logs[0]) * (A.T @ A)
-        else:
-            raise ValueError(f"Unknown area type: {s['area']!r}")
-        blocks_Q.append(Q_a)
-
-        if _has_ar1:
-            ph = _pb * np.tanh(raw_dep[_ph_i]) if _raw_len > _ph_i else 0.0
-            if "area_time" in blocks:
-                # area_specific ar1: block-diag per area (n_area blok T x T), no cross-area coupling
-                T_cell = n_time // n_area if n_area else n_time
-                TQ = ar1_precision(T_cell, logs[1], ph, backend, phi_bound=_pb)
-                if hasattr(TQ, 'toarray'):
-                    TQ = TQ.toarray()
-                Q_t = _sp_blkdiag([TQ] * n_area, format="csr").toarray()
-            else:
-                Q_t = ar1_precision(n_time, logs[1], ph, backend, phi_bound=_pb)
-                if hasattr(Q_t, 'toarray'):
-                    Q_t = Q_t.toarray()
-        else:
-            Q_t = np.exp(-2.0 * logs[1]) * np.eye(n_time, dtype=np.float64)
-        blocks_Q.append(Q_t)
-        Q_base = np.asarray(_sp_blkdiag(blocks_Q, format="csr").toarray())
-
-    Q_full = Q_base
-    if n_gamma > 0:
-        from stmmlib.beta.solvers import beta_Q_gamma
-        Q_g = beta_Q_gamma(s, des, des["m"], des["T"], n_gamma, logs, raw_dep,
-                           ksd, optim_results.get("q_dep", len(raw_dep)),
-                           _has_sar, _has_ar1, backend)
-        if Q_g is not None:
-            Q_full = np.block([[Q_base, np.zeros((Q_base.shape[0], n_gamma))],
-                               [np.zeros((n_gamma, Q_base.shape[0])), Q_g]])
+    use_blocked = (not is_nested and s["interaction"] == "none"
+                   and s["time_scope"] == "area_specific")
+    Q_full = build_beta_Q(
+        s, des, optim_results.get("W"), logs, raw_dep, ksd,
+        int(optim_results.get("q_dep", len(raw_dep))),
+        rho_bound=rb, phi_bound=_pb, backend=backend,
+        use_blocked=use_blocked)
 
     q = Z.shape[1]
     if Q_full.shape[0] != q:
@@ -365,8 +304,6 @@ def _neg_loglik_for_hessian(param_vec: np.ndarray, optim_results: dict) -> float
 
     # Newton solve (blocked for area-specific non-interaction models, same as fit)
     from stmmlib.beta.solvers import beta_solve_mode, beta_solve_mode_blocked, laplace_block_logdets
-    use_blocked = (not is_nested and s["interaction"] == "none"
-                   and s["time_scope"] == "area_specific")
     schur_inner = use_blocked
     start_b = optim_results.get("b_hat")
     if use_blocked:
@@ -395,8 +332,9 @@ def _neg_loglik_for_hessian(param_vec: np.ndarray, optim_results: dict) -> float
             H_mat = Z.T @ (Z * beta_nll_curvature(eta, y, phi)[:, None]) + Q_full
             logdet_H = np.linalg.slogdet(H_mat)[1]
     except Exception:
-        logdet_Q = 0.0
-        logdet_H = 0.0
+        # A failed logdet is not a zero logdet: zero would score a broken
+        # evaluation as a plausible likelihood.
+        return 1e20
 
     loglik = -nll - pen + 0.5 * logdet_Q - 0.5 * logdet_H
     return -loglik if np.isfinite(loglik) else 1e20

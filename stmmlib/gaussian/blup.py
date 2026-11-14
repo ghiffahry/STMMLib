@@ -74,30 +74,23 @@ def compute_blup(
     # Residuals from fixed effects
     e = _to_np_backend(backend, y_arr) - _to_np_backend(backend, X_arr) @ _to_np_backend(backend, beta_hat)
 
-    # v_hat = G_a Z_area' V^{-1} e  (area BLUP)
-    # Simplified: v_hat = G_a Z_area' e / sigma2_e for IID
-    if area_type == "iid":
-        v_hat = sigma2_v * (_to_np_backend(backend, Z_area).T @ e) / sigma2_e
-    else:
-        # For SAR: use GLS-based BLUP
-        from stmmlib.gaussian.covariance import build_V
-        V = build_V(data, model, theta, backend)
-        L = safe_cholesky(V, backend)
-        Vinv_e = _solve_chol(L, e, backend)
-        v_hat = G_a @ _to_np_backend(backend, Z_area).T @ Vinv_e
+    # One V^{-1}e pass for every block: b = G Z' V^{-1} e is the Henderson
+    # BLUP. The old IID shortcut (G Z' e / sigma2_e) ignored the time/area
+    # covariance and was not the conditional mean.
+    from stmmlib.gaussian.covariance import build_V
+    V = build_V(data, model, theta, backend)
+    L = safe_cholesky(V, backend)
+    Vinv_e = _solve_chol(L, e, backend)
+
+    v_hat = G_a @ _to_np_backend(backend, Z_area).T @ Vinv_e
 
     # Time BLUP
     u_hat = xp.zeros(T, dtype=xp.float64)
-    if time_type == "iid":
-        u_hat = sigma2_u * (_to_np_backend(backend, data["Z_time"]).T @ e) / sigma2_e if "Z_time" in data else u_hat
-    elif time_type == "ar1":
-        G_t = _to_np_backend(backend, build_G_time(time_type, T, sigma2_u, sigma2_eta, phi, backend))
-        if "Z_time" in data:
-            from stmmlib.gaussian.covariance import build_V
-            V = build_V(data, model, theta, backend)
-            L = safe_cholesky(V, backend)
-            Vinv_e = _solve_chol(L, e, backend)
-            u_hat = G_t @ _to_np_backend(backend, data["Z_time"]).T @ Vinv_e
+    if "Z_time" in data:
+        G_t = _to_np_backend(
+            backend,
+            build_G_time(time_type, T, sigma2_u, sigma2_eta, phi, backend))
+        u_hat = G_t @ _to_np_backend(backend, data["Z_time"]).T @ Vinv_e
 
     # Interaction BLUP
     gamma_hat = xp.zeros(0, dtype=xp.float64)
@@ -115,10 +108,6 @@ def compute_blup(
                     contrasts, backend,
                 )
                 if G_g is not None:
-                    from stmmlib.gaussian.covariance import build_V
-                    V = build_V(data, model, theta, backend)
-                    L = safe_cholesky(V, backend)
-                    Vinv_e = _solve_chol(L, e, backend)
                     Zg = _to_np_backend(backend, Z_gamma)
                     Gg_np = _to_np_backend(backend, G_g)
                     gamma_hat = Gg_np @ Zg.T @ Vinv_e
