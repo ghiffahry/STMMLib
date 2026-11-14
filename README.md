@@ -183,7 +183,7 @@ prediction intervals.
   author  = {Ghiffary, Ghardapaty},
   title   = {STMMLib: spatio-temporal mixed models for areal panel data},
   year    = {2026},
-  version = {0.2.3},
+  version = {0.2.4},
   url     = {https://github.com/ghiffahry/STMMLib},
   license = {MIT}
 }

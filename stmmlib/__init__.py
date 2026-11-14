@@ -17,7 +17,7 @@ try:  # single source of truth for the version: the installed package metadata
     from importlib.metadata import version as _pkg_version
     __version__ = _pkg_version("stmmlib")
 except Exception:  # source checkout without an install
-    __version__ = "0.2.3"
+    __version__ = "0.2.4"
 __all__ = [
     "stmm",
     "stmm_normal",

@@ -3,7 +3,7 @@
 All notable changes to `stmmlib`. Format follows Keep-a-Changelog; versions
 follow Semantic Versioning.
 
-## [Unreleased]
+## [0.2.4] - 2026-11-14
 
 ### Changed
 
@@ -13,6 +13,32 @@ follow Semantic Versioning.
   `stmmlib.output_format*` modules and `stmmlib.mse_bootstrap` remain as
   compatibility shims, so existing imports keep working. Stale `__pycache__`
   directories were removed from the source tree.
+- The Beta Laplace engine was split into single-purpose modules under
+  `stmmlib.beta.engine` (likelihood, gradient, hooks, optimize, finalize,
+  hessian, numerics). `stmmlib.beta.solvers` re-exports every previous name,
+  so existing imports keep working. Point estimates and likelihoods are
+  unchanged by the split.
+
+### Fixed
+
+- Gaussian fits are invariant to input row order: `y` and `X` are sorted with
+  the prepared design before fitting instead of keeping caller order.
+- `build_V` uses the time design for `time_scope="global"`. The area-major
+  time block was used for both scopes, so a global AR(1) fit silently ignored
+  the shared time factor.
+- The Gaussian Hessian uses the correct sign and backend, so `se_theta` is
+  available and finite for the IID model.
+- Gaussian, Beta, and Beta-simulation spatial interaction covariances are
+  area-major (`kron(qa, I_T)`). The transposed Kronecker order disagreed with
+  the design matrix.
+- Beta cAIC and `df_hat` use the same precision builder as the fit engine
+  (`build_beta_Q`), so criteria cannot drift from the fitted prior.
+- `predict_interval` on a Beta fit raises `ValueError` when `vcov` is missing
+  instead of returning a point interval that looked like an interval.
+- The fixed-effect intercept SE uses the full delta method, including the
+  covariance between the intercept and the other fixed effects.
+- Gaussian IID BLUP uses `G Z' V^{-1} e` instead of the scaled residual, which
+  is only equivalent for a diagonal `G`.
 
 ## [0.2.3] - 2026-11-13
 
