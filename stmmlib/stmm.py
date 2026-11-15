@@ -157,8 +157,11 @@ def stmm_normal(
     """
     _reject_formula(formula)
     from stmmlib.registry import MODELS
-    from stmmlib._utils import interaction_parse
+    from stmmlib._utils import interaction_parse, require_numeric_predictors
     from stmmlib._backend import Backend
+
+    require_numeric_predictors(
+        data, (area_col, time_col, prov_col or "prov", kab_col or "kab"))
 
     spec = MODELS.get(model)
     if spec is not None:
@@ -196,6 +199,7 @@ def stmm_normal(
                                   interaction=interaction_parse(interaction),
                                   method=method, n_starts=n_starts,
                                   response_col=response_col,
+                                  prov_col=prov_col, kab_col=kab_col,
                                   backend=backend, time_scope=time_scope,
                                   **kwargs)
     elif spatial in ("nested_iid", "nested_sar"):
@@ -214,6 +218,7 @@ def stmm_normal(
                                    interaction=interaction_parse(interaction), W=W,
                                    method=method, n_starts=n_starts,
                                    response_col=response_col,
+                                   prov_col=prov_col, kab_col=kab_col,
                                    backend=backend, time_scope=time_scope,
                                    **kwargs)
 

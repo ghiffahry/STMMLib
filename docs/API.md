@@ -117,7 +117,7 @@ cfg = BetaFitConfig(rho_bound=0.90, phi_bound=0.95, auto_prior=False)
 | `inference` | est/se/z/p per param + `vcov`, `hessian_pd`, `lambda_min`, label |
 | `residuals("dunn_smyth" \| "response" \| "conditional" \| "marginal")` | residual |
 | `ranef()`, `coef()`, `predict(X_new)` | efek acak, koefisien, prediksi |
-| `predict_interval(level=0.95, include_obs=True)` | PI logit-delta (P5) |
+| `predict_interval(level=0.95, include_obs=True)` | PI logit-delta (P5); `ValueError` bila `vcov` tidak tersedia |
 | `stmmlib.beta.criteria.beta_criteria(fit)` | cAIC, df_hat, cR2 marginal/conditional, komponen varian |
 
 ## Diagnostik (satu pintu)

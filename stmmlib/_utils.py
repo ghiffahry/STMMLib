@@ -173,3 +173,25 @@ def interaction_param_names(interaction: str) -> list[str]:
     return []
 
 
+def require_numeric_predictors(data, exempt) -> None:
+    """Name the offending column instead of numpy's conversion error.
+
+    Every column that is not the response or a grouping column becomes a
+    predictor, so a leftover text column reaches the design matrix and fails
+    there with "could not convert string to float", which names nothing.
+    """
+    if data is None or not hasattr(data, "columns"):
+        return
+    skip = {c for c in exempt if c}
+    for col in data.columns:
+        if col in skip:
+            continue
+        try:
+            data[col].to_numpy(dtype=float)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"kolom {col!r} bukan numerik; kolom selain area, waktu, dan "
+                "kolom pengelompokan dipakai sebagai prediktor. Ubah ke "
+                "numerik atau keluarkan dari data.") from None
+
+

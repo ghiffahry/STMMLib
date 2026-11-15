@@ -305,7 +305,7 @@ def seblup_rao_yu_it(
     formula, data, area, time, W, interaction="none", area_type="sar",
     method="REML", start=None, n_starts=3, max_iter=500,
     compute_se=True, verbose=False, response_col="y", backend=None,
-    time_scope="area_specific",
+    time_scope="area_specific", prov_col=None, kab_col=None,
 ):
     """SEBLUP Rao-Yu IT model (M5/M12)."""
     if backend is None:
@@ -330,7 +330,7 @@ def seblup_rao_yu_it(
     # The response is skipped under its own name: with the literal "y" the
     # response became its own predictor whenever response_col was something
     # else (a silently wrong model).
-    _skip = {area, time, response_col or "y", "prov", "kab"}
+    _skip = {area, time, response_col or "y", prov_col or "prov", kab_col or "kab"}
     x_cols = [c for c in data.columns if c not in _skip]
     _warn_unused_conventional_columns(data, x_cols)
     X = np.column_stack([np.ones(n)] + [fit_data[c].values.astype(np.float64) for c in x_cols]) if x_cols else np.ones((n, 1), dtype=np.float64)

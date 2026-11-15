@@ -3,6 +3,31 @@
 All notable changes to `stmmlib`. Format follows Keep-a-Changelog; versions
 follow Semantic Versioning.
 
+## [0.2.5] - 2026-11-15
+
+### Fixed
+
+- Gaussian flat and SEBLUP models forward `prov_col`/`kab_col` to the fitting
+  core. Custom-named grouping columns are now excluded from the fixed-effect
+  design; before, only the literal names `prov`/`kab` were skipped, so a frame
+  carrying e.g. `provinsi`/`kabupaten` leaked those text columns into `X`
+  (numpy dtype error, or a silently wrong design).
+- A non-numeric response or predictor in a Gaussian fit raises `ValueError`
+  naming the offending column, matching the Beta path, instead of numpy's
+  "could not convert string to float".
+
+### Changed
+
+- `seblup_rao_yu_it` accepts `prov_col`/`kab_col` (default `None`); existing
+  positional calls are unchanged.
+
+### Notes
+
+- Beta fits can differ by roughly `1e-4` in log-likelihood when the caller
+  permutes rows: the standardisation means are summed in frame order, and the
+  auto-prior refit is a threshold branch that can flip near its boundary.
+  Sort the frame before fitting when a bit-stable reproduction matters.
+
 ## [0.2.4] - 2026-11-14
 
 ### Changed
