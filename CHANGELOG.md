@@ -3,6 +3,48 @@
 All notable changes to `stmmlib`. Format follows Keep-a-Changelog; versions
 follow Semantic Versioning.
 
+## [0.2.6] - 2026-11-15
+
+### Fixed
+
+- `family` is validated, with "normal" accepted as a Gaussian alias. A
+  misspelling no longer falls through to a Gaussian fit, and `family=None`
+  raises instead of an AttributeError.
+- `method` is validated: Gaussian accepts ML/REML (case-insensitive), Beta
+  accepts ML/Laplace (REML rejected). A lowercase `method='reml'` used to be
+  fitted as ML. `stmm` resolves `method=None` per family.
+- Duplicate column names are rejected before fitting; a duplicated predictor
+  silently produced `log_lik = inf`.
+- A Beta SAR/SEBLUP model without `W` now raises `ValueError`; it used to
+  return `nan`.
+- A Gaussian `W` whose shape mismatches the number of areas raises a named
+  error instead of a numpy broadcast failure.
+- NaN/Inf response or predictor values are named and rejected in the
+  Gaussian path (previously a raw LinAlgError or numpy message).
+- A misspelled `interaction` (e.g. `tempoarl`) raises `ValueError`; it used
+  to fall through to `none`.
+- Unknown model ids raise a `ValueError` listing known ids instead of
+  "Unknown area_type: None"; `stmm` requires a known model at the door.
+- `stmm_available_models` accepts "gaussian" (alias of "normal"),
+  case-insensitively.
+- Non-default `response_col`/`area_col`/`time_col` that do not exist raise a
+  named `ValueError` instead of a KeyError deep in the backend; for Beta the
+  `response_col` fallback to `y` no longer silently fits the wrong column.
+- Gaussian nested models without `prov_col`/`kab_col` raise a named
+  `ValueError` instead of `KeyError('prov_index')`.
+- The Beta backend ignores unknown keyword arguments; a misspelled extra
+  keyword (e.g. `n_start`) now raises `ValueError`.
+- `inference` is validated ("wald" or "lrt", case-insensitive) in both
+  families; it used to be silently ignored outside "lrt" for Gaussian.
+- `n_starts` must be an integer >= 1; 0 and negative values used to fit
+  with start_theta == 0.
+
+### Changed
+
+- Flat Beta models fitted without `nested_iid`/`nested_sar` structure now
+  warn, like the Gaussian path, when a numeric predictor is swallowed as the
+  `prov`/`kab` grouping column (defaults) instead of entering the design.
+
 ## [0.2.5] - 2026-11-15
 
 ### Fixed

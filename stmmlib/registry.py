@@ -197,20 +197,20 @@ MODELS: dict[str, ModelSpec] = {
 
 def stmm_available_models(family: str = "normal") -> list[str]:
     """Return list of available model IDs for a given family.
-
     A model belongs to a family when it has at least one parameter in that
     family: `beta_regression` has no random effects, so it is a Beta-only
-    model.
+    model. "gaussian" is an alias of "normal", case-insensitively.
 
     Args:
-        family: "normal" or "beta".
+        family: "normal"/"gaussian" or "beta".
 
     Returns:
         List of model ID strings.
     """
-    if family == "normal":
+    key = str(family).strip().lower()
+    if key in ("normal", "gaussian"):
         return [mid for mid, s in MODELS.items() if s.n_params_normal > 0]
-    if family == "beta":
+    if key == "beta":
         return [mid for mid, s in MODELS.items() if s.n_params_beta > 0]
     raise ValueError(f"Unknown family: {family!r}. Use 'normal' or 'beta'.")
 

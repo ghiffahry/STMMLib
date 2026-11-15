@@ -169,8 +169,15 @@ prediction intervals.
 - Nested models with interactions are dense and slow. Raise `max_iter` for them.
 - `simulate_beta` supports the flat models M1-M5 and the interaction models
   M8-M12. Nested models M6/M7/M13/M14 raise `ValueError`.
-- `beta_criteria` (cAIC, conditional R2) returns NaN for nested models; their
-  province/district/cell precision builder is not implemented.
+- `beta_criteria` (cAIC, conditional R2) returns NaN for the nested models
+  M6/M7/M13/M14 by design. Their province/district/cell precision builder
+  exists, but the criteria are only published after simulation validation of
+  the working nested builder.
+- The public entry points enforce a strict input contract: unknown
+  `family`/`method`/`inference`/`model`, duplicate column names, missing
+  response/area/time columns, non-numeric or NaN predictors, a misspelled
+  extra keyword, and a zero `n_starts` raise `ValueError` naming the cause.
+  Silent fallbacks (e.g. `family='poisson'` fitting Gaussian) were removed.
 - When the automatic prior refit is used, the reported `logLik`, `AIC`, and
   `BIC` are the penalized objective. The fit's `optim` record
   (`fit._opt["optim"]`) flags this with `penalty_auto` and reports the
@@ -183,7 +190,7 @@ prediction intervals.
   author  = {Ghiffary, Ghardapaty},
   title   = {STMMLib: spatio-temporal mixed models for areal panel data},
   year    = {2026},
-  version = {0.2.5},
+  version = {0.2.6},
   url     = {https://github.com/ghiffahry/STMMLib},
   license = {MIT}
 }

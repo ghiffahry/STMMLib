@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from stmmlib._validate import check_beta_input, check_model, check_normal_input, check_n_starts, normalize_family, normalize_inference, normalize_method, reject_unknown_beta_kwargs
+
 if TYPE_CHECKING:
     import numpy as np
     from stmmlib._backend import Backend
@@ -29,7 +31,7 @@ def stmm(
     model: str = "m4_sar_ar1",
     family: str = "gaussian",
     W=None,
-    method: str = "REML",
+    method: str | None = None,
     gpu: str = "auto",
     n_starts: int = 3,
     preset: str | None = None,
@@ -58,9 +60,9 @@ def stmm(
             non-skipped data column.
         data: pandas DataFrame.
         model: Model ID (e.g. "m4_sar_ar1" for Gaussian, "m1_iid_iid" for Beta).
-        family: "gaussian" or "beta".
+        family: "gaussian" (alias "normal") or "beta".
         W: Spatial weight matrix.
-        method: "ML", "REML", or "Laplace".
+        method: "ML"/"REML" (Gaussian) or "Laplace" (Beta); None picks the default.
         gpu: "auto", "yes", or "no".
         n_starts: Number of random restarts.
         preset: accuracy preset for the Beta family ("fast", "balanced",
@@ -94,14 +96,18 @@ def stmm(
     Returns:
         StMMResult (Gaussian) or BetastmmResult (Beta).
     """
-    if family.lower() == "beta":
+    family = normalize_family(family)
+    method = normalize_method(method, family) if method is not None else {"gaussian": "REML", "beta": "Laplace"}[family]
+    n_starts = check_n_starts(n_starts)
+    model = check_model(model)
+    if family == "beta":
         from stmmlib.registry import MODELS
         spec = MODELS.get(model)
         if spec is not None and spec.n_params_beta == 0:
             raise ValueError(
                 f"model {model!r} is not available for family='beta' "
                 f"(it has no Beta structure).")
-        return stmm_beta(formula, data, model, W, method="Laplace", gpu=gpu,
+        return stmm_beta(formula, data, model, W, method=method, gpu=gpu,
                          n_starts=n_starts, preset=preset,
                          response_col=response_col,
                          area_col=area_col, time_col=time_col,
@@ -156,6 +162,10 @@ def stmm_normal(
     ``temporal``/``prov_col``) when your data uses non-default names.
     """
     _reject_formula(formula)
+    method = normalize_method(method, "gaussian")
+    inference = normalize_inference(inference)
+    n_starts = check_n_starts(n_starts)
+    model = check_model(model, allow_none=True)
     from stmmlib.registry import MODELS
     from stmmlib._utils import interaction_parse, require_numeric_predictors
     from stmmlib._backend import Backend
@@ -190,6 +200,8 @@ def stmm_normal(
     else:
         time_scope = None
 
+    check_normal_input(data, response_col, area_col, time_col, W, spatial, prov_col, kab_col)
+
     _gpu = {"yes": True, "no": False}.get(str(gpu).lower(), "auto")
     backend = Backend(gpu=_gpu)
 
@@ -222,7 +234,7 @@ def stmm_normal(
                                    backend=backend, time_scope=time_scope,
                                    **kwargs)
 
-    if str(inference).lower() == "lrt":
+    if inference == "lrt":
         # The LRT re-fits the model with ML (REML likelihoods are not
         # comparable across designs) and leaves the fit above untouched.
         from stmmlib.gaussian.lrt_fixed import (attach_lrt_inference,
@@ -272,6 +284,12 @@ def stmm_beta(
     column names instead of the conventional ``y``/``area``/``time``.
     """
     _reject_formula(formula)
+    model = check_model(model)
+    method = normalize_method(method, "beta")
+    inference = normalize_inference(inference)
+    n_starts = check_n_starts(n_starts)
+    check_beta_input(data, response_col, W, model, area_col, time_col, prov_col, kab_col)
+    reject_unknown_beta_kwargs(kwargs)
     from stmmlib.beta.fit import stmm_beta as _stmm_beta
     return _stmm_beta(formula, data, model, W, method=method, gpu=gpu,
                       n_starts=n_starts, preset=preset,

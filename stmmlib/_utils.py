@@ -112,19 +112,32 @@ def logdet_matrix(M, backend: Backend):
 
 
 def interaction_parse(interaction: str) -> str:
-    """Normalize interaction type string."""
+    """Normalize interaction type string; reject an unknown type.
+
+    A typo used to fall through to "none", silently dropping the whole
+    interaction variance component.
+    """
+    if interaction is None:
+        return "none"
+    key = str(interaction).strip().lower()
     mapping = {
+        "": "none",
         "none": "none",
+        "0": "none",
         "iid": "iid",
         "spatial": "spatial",
         "temporal": "temporal",
         "st": "st",
-        "Type I": "iid",
-        "Type II": "spatial",
-        "Type III": "temporal",
-        "Type IV": "st",
+        "type i": "iid",
+        "type ii": "spatial",
+        "type iii": "temporal",
+        "type iv": "st",
     }
-    return mapping.get(str(interaction).strip().lower(), "none")
+    if key not in mapping:
+        raise ValueError(
+            f"interaction {interaction!r} tidak dikenal; pilihan: none, iid, "
+            "spatial, temporal, st (atau Type I-IV).")
+    return mapping[key]
 
 
 def interaction_active(interaction: str) -> bool:
@@ -179,7 +192,9 @@ def require_numeric_predictors(data, exempt) -> None:
     Every column that is not the response or a grouping column becomes a
     predictor, so a leftover text column reaches the design matrix and fails
     there with "could not convert string to float", which names nothing.
+    A NaN/Inf value fails even later (SVD), so it is rejected here too.
     """
+    import numpy as np
     if data is None or not hasattr(data, "columns"):
         return
     skip = {c for c in exempt if c}
@@ -187,11 +202,15 @@ def require_numeric_predictors(data, exempt) -> None:
         if col in skip:
             continue
         try:
-            data[col].to_numpy(dtype=float)
+            values = data[col].to_numpy(dtype=float)
         except (TypeError, ValueError):
             raise ValueError(
                 f"kolom {col!r} bukan numerik; kolom selain area, waktu, dan "
                 "kolom pengelompokan dipakai sebagai prediktor. Ubah ke "
                 "numerik atau keluarkan dari data.") from None
+        if not np.all(np.isfinite(values)):
+            raise ValueError(
+                f"kolom {col!r} mengandung NaN/Inf; bersihkan atau hilangkan "
+                "kolom bermasalah sebelum fitting.")
 
 
