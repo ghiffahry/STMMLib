@@ -34,7 +34,7 @@ def mixture_chi2_pvalue(D: float) -> float:
         return 1.0
     if D == 0:
         return 1.0  # point mass at 0 under H0
-    return 0.5 * (1.0 - float(chi2.cdf(D, 1)))
+    return 0.5 * float(chi2.sf(D, 1))
 
 
 def boundary_lrt(loglik_full: float, loglik_null: float,

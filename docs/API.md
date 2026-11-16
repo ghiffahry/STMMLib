@@ -72,6 +72,10 @@ fit = stmm(data=df, model="m3_sar_iid", family="gaussian", W=W,
   profil (komponen varian di-refit), Wald uji kondisional (varian di-fiks).
   Pada panel sintetis: D = 46,70 vs z^2 = 66,88; dengan varian di-fiks,
   D = z^2 persis. Untuk pemeriksaan silang, pakai fit `method="ML"`.
+- `AIC`/`BIC` model Gaussian selalu dihitung dari log-likelihood ML pada
+  `theta_hat` yang tersimpan, meskipun fit utamanya REML. Log-likelihood
+  REML bergantung pada desain X, jadi tidak sah untuk membandingkan model
+  dengan peubah tetap berbeda. `fit["log_lik"]` tetap nilai sesuai `method`.
 - Keluarga yang didukung: core (m1-m4, m8-m11), SEBLUP (m5/m12),
   nested (m6/m13), nested-ar1 (m7/m14).
 
@@ -116,9 +120,9 @@ cfg = BetaFitConfig(rho_bound=0.90, phi_bound=0.95, auto_prior=False)
 | `convergence` (dict), `status` | konvergen \| max_iter \| invalid; `at_bound`, `degenerate` |
 | `inference` | est/se/z/p per param + `vcov`, `hessian_pd`, `lambda_min`, label |
 | `residuals("dunn_smyth" \| "response" \| "conditional" \| "marginal")` | residual |
-| `ranef()`, `coef()`, `predict(X_new)` | efek acak, koefisien, prediksi |
-| `predict_interval(level=0.95, include_obs=True)` | PI logit-delta (P5); `ValueError` bila `vcov` tidak tersedia |
-| `stmmlib.beta.criteria.beta_criteria(fit)` | cAIC, df_hat, cR2 marginal/conditional, komponen varian |
+| `ranef()`, `coef()`, `predict(X_new)` | efek acak, koefisien, prediksi (X_new skala asli; `standardized=True` untuk skala internal) |
+| `predict_interval(X=None, level=0.95, include_obs=True, standardized=False)` | PI logit-delta (P5); `X` skala asli, `standardized=True` untuk skala internal; `ValueError` bila `vcov` tidak tersedia |
+| `stmmlib.beta.criteria.beta_criteria(fit)` | cAIC, df_hat, cR2 marginal/conditional, komponen varian; NaN disertai `reason` |
 
 ## Diagnostik (satu pintu)
 
@@ -139,6 +143,9 @@ from stmmlib.diagnostics_suite import (
   shrinkage, CI Wald-log komponen varian.
 - Struktur: balanced panel, validitas W (row-std, konektivitas, spectral),
   boundary mu, flag at_bound/degenerate.
+- `wald_table_beta(fit, method=None, fixed_only=False)`: tiap baris membawa
+  `certificate_valid` (False = fit belum layak inferensi); `fixed_only=True`
+  hanya baris efek tetap.
 
 ## Uji komponen varian
 

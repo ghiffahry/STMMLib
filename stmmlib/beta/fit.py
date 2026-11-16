@@ -249,6 +249,18 @@ def stmm_beta(
         raise ValueError(f"response column {response_col!r} not found in data.")
     _validate_contract(d, W, area_labels)
 
+    # A SAR area block without W is not a spatial model: the precision
+    # builder would fall back to identity and absorb rho into the variance.
+    from stmmlib.beta.structure import stmm_beta_structure as _struct_guard
+    try:
+        _guard_spec = _struct_guard(model)
+    except KeyError:
+        _guard_spec = None
+    if _guard_spec is not None and _guard_spec["area"] == "sar" and W is None:
+        raise ValueError(
+            f"model {model!r} punya blok area SAR; W wajib diberikan "
+            "(matriks bobot, urutan area = sorted(area)).")
+
     # Input guards. A new dataset must fail here, with a message that names
     # the problem, not inside the optimizer as "semua start gagal".
     _y = d["y"].values.astype(np.float64)
@@ -514,6 +526,14 @@ def stmm_beta(
                     f"hasil unpenalized dipakai")
             _optim["penalty_refit_msg"] = _msg
             _cert.setdefault("warnings", []).append(_msg)
+
+    # The config decides the bounds and the penalty; keep it on the fit so a
+    # post-hoc LRT (lrt_fixed_effects) refits the same model.
+    _optim_f = opt.get("optim") or {}
+    opt["fit_config"] = (
+        _auto_cfg if (_optim_f.get("penalty_auto")
+                      and not _optim_f.get("penalty_refit_failed"))
+        else config)
 
     from stmmlib.beta.inference import compute_stbl_inference
     inf = compute_stbl_inference(opt, skip_hessian=not _hess)

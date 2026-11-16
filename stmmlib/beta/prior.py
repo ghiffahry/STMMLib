@@ -84,10 +84,17 @@ def build_beta_Q(s, des, W, logs, raw_dep, ksd, q_dep, *,
             rho = rho_bound * np.tanh(raw_dep[rho_i]) if q_dep > rho_i else 0.0
             W_arr = W if W is not None else des.get("W_gamma")
             if W_arr is None:
-                W_arr = np.eye(n_area, dtype=np.float64)
-            elif hasattr(W_arr, "toarray"):
+                # An identity fallback would silently turn the SAR model
+                # into iid (rho absorbed into the variance).
+                raise ValueError(
+                    "SAR area block needs W; pass the spatial weight matrix.")
+            if hasattr(W_arr, "toarray"):
                 W_arr = W_arr.toarray()
-            W_arr = np.asarray(W_arr, dtype=np.float64)[:n_area, :n_area]
+            W_arr = np.asarray(W_arr, dtype=np.float64)
+            if W_arr.shape != (n_area, n_area):
+                raise ValueError(
+                    f"W shape {W_arr.shape} mismatches n_area {n_area}; "
+                    "W rows/cols must follow sorted(area).")
             A = np.eye(n_area, dtype=np.float64) - rho * W_arr
             Q_a = np.exp(-2.0 * logs[0]) * (A.T @ A)
         else:

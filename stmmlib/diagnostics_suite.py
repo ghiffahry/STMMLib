@@ -337,11 +337,17 @@ def nested_lrt_with_df(loglik_full: float, loglik_null: float, df: int) -> dict:
                         else "tidak signifikan")}
 
 
-def wald_table_beta(fit, method=None) -> "list[dict]":
+def wald_table_beta(fit, method=None, fixed_only=False) -> "list[dict]":
     """P11: tidy fixed-effect table (estimate, SE, z, p) from the inference block.
 
     Estimates are on the FITTED scale (standardized predictors for beta);
     use fit.coef() for original-scale coefficients.
+
+    fixed_only: keep only the fixed-effect rows (drop the structural
+    parameters). The default keeps every parameter, as before.
+
+    Every row carries `certificate_valid` from the convergence certificate:
+    a False value means the fit is not inference-grade.
 
     method:
         None (default) follows the fit: "lrt" when the model was fitted with
@@ -374,8 +380,9 @@ def wald_table_beta(fit, method=None) -> "list[dict]":
                          "inference='lrt' to get likelihood ratio p-values.")
 
     rows = []
+    cert_valid = (getattr(fit, "certificate", None) or {}).get("valid")
     for i, lab in enumerate(labels):
-        if i >= len(est):
+        if i >= len(est) or (fixed_only and i >= p_fixed):
             break
         term = x_cols[i - 1] if 1 <= i <= p_fixed - 1 else None
         lrow = lrt_terms.get(term) if term else None
@@ -395,7 +402,8 @@ def wald_table_beta(fit, method=None) -> "list[dict]":
                      "z": z, "statistic": statistic,
                      "p_value": p_val,
                      "p_value_wald": float(pv_wald[i]) if i < len(pv_wald) else np.nan,
-                     "test": test})
+                     "test": test,
+                     "certificate_valid": cert_valid})
     return rows
 
 

@@ -55,7 +55,8 @@ def _beta_criteria(fit, use_W=None):
     if cr is None:
         return None
     return {k: cr.get(k) for k in
-            ("cAIC", "df_hat", "ll_cond", "cR2_marginal", "cR2_conditional")}
+            ("cAIC", "df_hat", "ll_cond", "cR2_marginal",
+             "cR2_conditional", "reason")}
 
 
 def evaluate(fit, criteria=None, holdout=None, use_W=None) -> dict:
@@ -200,7 +201,7 @@ def _ljung_box(resid, nlags=8):
         return np.nan, np.nan
     acf = np.array([np.sum(x[:n - k] * x[k:]) / denom for k in range(1, nlags + 1)])
     stat = n * (n + 2) * np.sum(acf ** 2 / np.arange(1, nlags + 1))
-    return float(stat), float(1 - chi2.cdf(stat, nlags))
+    return float(stat), float(chi2.sf(stat, nlags))
 
 
 def stmm_beta_diagnostics(fit, W=None, as_str: bool = True):

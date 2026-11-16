@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stmmlib"
-version = "0.2.6"
+version = "0.2.7"
 description = "Family-aware spatio-temporal mixed models (Gaussian + Beta) with optional GPU acceleration"
 readme = "README.md"
 license = "MIT"
@@ -52,3 +52,6 @@ dev = ["pytest>=7.0", "pytest-cov"]
 
 [tool.setuptools.packages.find]
 include = ["stmmlib*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -84,7 +84,7 @@ def beta_criteria(fit, W=None):
         from stmmlib.beta.structure import stmm_beta_structure
         s = stmm_beta_structure(model)
         if s["area"] in ("nested_iid", "nested_sar"):
-            return _nan_result()  # nested precision: dedicated builder needed
+            return _nan_result("nested precision: dedicated builder needed")
 
         blocks = des.get("blocks", {}) or {}
         n_area = len(blocks.get("area", []))
@@ -149,7 +149,9 @@ def beta_criteria(fit, W=None):
         if (not np.isfinite(ll_cond) or not np.isfinite(df_hat)
                 or (np.isfinite(ll_marg)
                     and ll_cond < ll_marg - max(10.0, 0.01 * abs(ll_marg)))):
-            out = _nan_result()
+            out = _nan_result(
+                "ll_cond or df_hat non-finite, or ll_cond below the marginal "
+                "likelihood: stale mu_hyp or inputs")
             out["df_hat"], out["ll_cond"] = df_hat, ll_cond
             return out
         caic = -2 * ll_cond + 2 * df_hat
@@ -179,9 +181,9 @@ def beta_criteria(fit, W=None):
         return None
 
 
-def _nan_result():
+def _nan_result(reason: str = ""):
     nan = float("nan")
     return {"cAIC": nan, "df_hat": nan, "ll_cond": nan,
             "cR2_marginal": nan, "cR2_conditional": nan,
             "var_fixed": nan, "var_random_latent": nan,
-            "var_resid_beta": nan}
+            "var_resid_beta": nan, "reason": reason}

@@ -182,17 +182,43 @@ class BetastmmResult:
             eta = eta + self._opt["Z"] @ self._opt["b_hat"]
         return 1.0 / (1.0 + np.exp(-eta))
 
-    def predict(self, X=None, include_random=True, Z=None) -> np.ndarray:
+    def _standardize_X(self, X) -> np.ndarray:
+        """Apply the fit's centering/scaling to an original-scale design."""
+        des = self._opt.get("des", {}) or {}
+        x_cols = list(des.get("x_cols", []) or [])
+        X = np.asarray(X, dtype=float)
+        if X.ndim != 2 or X.shape[1] != len(x_cols) + 1:
+            raise ValueError(
+                f"X must be (n, {len(x_cols) + 1}) [intercept + {x_cols}], "
+                f"got {X.shape}.")
+        X = X.copy()
+        scale = des.get("x_scale", {}) or {}
+        for j, c in enumerate(x_cols):
+            mn, sd = scale.get(c, (0.0, 1.0))
+            if sd > 1e-12:
+                X[:, j + 1] = (X[:, j + 1] - mn) / sd
+        return X
+
+    def predict(self, X=None, include_random=True, Z=None,
+                standardized=False) -> np.ndarray:
         """Return fitted/predicted mean on response scale.
 
         Args:
-            X: Optional fixed-effects design (n, p); defaults to fitted X.
+            X: Optional fixed-effects design (n, p) on the ORIGINAL
+                predictor scale, same columns as the fit data. The fit's
+                centering/scaling is applied internally. Defaults to the
+                fitted design.
             include_random: Add Z b_hat term when True.
             Z: Optional random-effects design for new data (n, p_r); if None
                 and X rows match training Z, use training Z, else fixed only.
+            standardized: Set True only when X is already on the internal
+                standardized scale (opt["X"]).
         """
         if X is None:
             return self.mu_hat
+        X = np.asarray(X, dtype=float)
+        if not standardized:
+            X = self._standardize_X(X)
         eta = X @ self.beta
         Zr = Z if Z is not None else self._opt.get("Z")
         b = self._opt.get("b_hat")
@@ -201,7 +227,8 @@ class BetastmmResult:
         return 1.0 / (1.0 + np.exp(-eta))
 
     def predict_interval(self, X=None, level: float = 0.95,
-                         include_obs: bool = True, Z=None) -> dict:
+                         include_obs: bool = True, Z=None,
+                         standardized: bool = False) -> dict:
         """P5: prediction interval on the response scale (logit-scale delta).
 
         Variance on the logit scale (approximate, documented):
@@ -210,10 +237,13 @@ class BetastmmResult:
                    columns, marginal sigma2_time/(1-phi^2) for ar1 cell
                    columns else sigma2_time, sigma2_gamma for interaction;
                    prior-based = conservative, ignores shrinkage)
-          obs    : 1 / (phi * mu * (1 - mu))  when include_obs
+          obs    : 1 / ((1 + phi) * mu * (1 - mu))  when include_obs
+                   (delta method on the Beta variance mu(1-mu)/(1+phi))
         Interval: sigmoid(logit(mu_hat) +/- z * se_logit), clipped to (0,1).
 
         Returns dict with mean, lower, upper, se_logit, width_mean.
+        X: optional fixed-effects design on the ORIGINAL predictor scale
+            (centered/scaled internally unless standardized=True).
         Z: optional random-effects design for new data (n, p_r); if None
             and X rows match training Z, use training Z, else fixed only.
         """
@@ -223,6 +253,8 @@ class BetastmmResult:
         s = stmm_beta_structure(o["model"])
         in_sample = X is None
         X = np.asarray(o["X"], float) if X is None else np.asarray(X, float)
+        if not in_sample and not standardized:
+            X = self._standardize_X(X)
         Zr = Z if Z is not None else o.get("Z")
         Zr = np.asarray(Zr, float) if Zr is not None else None
         b_hat = o.get("b_hat")
@@ -279,7 +311,8 @@ class BetastmmResult:
                 var_random = (Zr ** 2) @ per_col
 
         se_logit = np.sqrt(var_fixed + var_random +
-                           (1.0 / (phi * mu * (1 - mu)) if include_obs else 0.0))
+                           (1.0 / ((1.0 + phi) * mu * (1 - mu))
+                            if include_obs else 0.0))
         z = 1.959963985 if level == 0.95 else float(
             __import__("scipy.stats", fromlist=["norm"]).norm.ppf(0.5 + level / 2))
         lg = np.log(mu / (1 - mu))

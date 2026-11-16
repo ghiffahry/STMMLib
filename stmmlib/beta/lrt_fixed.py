@@ -83,6 +83,10 @@ def _is_penalized(opt: dict, config=None) -> bool:
     optim = opt.get("optim") or {}
     if optim.get("penalty_auto") and not optim.get("penalty_refit_failed"):
         return True
+    if config is None:
+        # Post-hoc lrt_fixed_effects has no config argument; the fit stores
+        # the config it actually used, so an explicit prior is not lost.
+        config = opt.get("fit_config")
     if config is not None:
         if getattr(config, "phi_prior_sd", None) is not None:
             return True
@@ -409,10 +413,12 @@ def lrt_fixed_terms(opt: dict, d, y, model, W, terms=None, *,
     if not np.isfinite(ll_full):
         ll_full = ll_full_stored
 
+    _penalized = _is_penalized(opt, config)
     out_terms = {}
     n_failed = 0
     for t in terms:
-        row = {"D": None, "df": 1, "p": None, "loglik_full": ll_full,
+        row = {"term": t, "D": None, "df": 1, "p": None,
+               "loglik_full": ll_full,
                "loglik_full_stored": ll_full_stored,
                "loglik_reduced": None, "status": "ok", "converged": None,
                "seconds": 0.0, "message": ""}
@@ -476,13 +482,20 @@ def lrt_fixed_terms(opt: dict, d, y, model, W, terms=None, *,
         else:
             row["status"] = "ok"
             row["D"] = float(max(2.0 * (ll_full - ll_red), 0.0))
-            row["p"] = float(chi2.sf(row["D"], 1))
+            if _penalized:
+                # 2*dlogLik of a penalized (MAP) objective is not chi2_1;
+                # report no p rather than an invalid one.
+                row["p"] = None
+                row["p_note"] = ("objective penalized (MAP): acuan chi2 tidak "
+                                 "berlaku; bandingkan dengan bootstrap")
+            else:
+                row["p"] = float(chi2.sf(row["D"], 1))
         if row["status"] != "ok":
             n_failed += 1
         out_terms[t] = row
 
     return {"method": "lrt", "df_per_term": 1,
-            "penalized": _is_penalized(opt, config),
+            "penalized": _penalized,
             "phi_at_bound": _phi_at_bound(opt, config),
             "n_failed": n_failed, "terms": out_terms,
             "seconds": time.perf_counter() - started}
@@ -508,8 +521,8 @@ def _check_labels(fit, area_labels, time_labels):
 
 
 def lrt_fixed_effects(fit, data, terms=None, *, response_col="y",
-                      area_col="area", time_col="time", prov_col=None,
-                      kab_col=None, **kw) -> dict:
+                      area_col="area", time_col="time", prov_col="prov",
+                      kab_col="kab", **kw) -> dict:
     """Likelihood ratio test for the fixed effects of an existing fit.
 
     The universal entry point: hand it the fitted object and the data the
@@ -547,5 +560,8 @@ def lrt_fixed_effects(fit, data, terms=None, *, response_col="y",
             "the data passed does not match the fitted model: the response "
             "differs from the one the model was estimated on.")
 
+    # The reduced refits must use the same config (bounds and prior) as the
+    # full fit, otherwise the two likelihoods are not comparable.
+    kw.setdefault("config", opt.get("fit_config"))
     return lrt_fixed_terms(opt, d, y_new, opt["model"],
                             getattr(fit, "_W", None), terms, **kw)

@@ -112,7 +112,9 @@ def test_golden_gaussian_m3_sar():
     _close_var(float(fit["theta"]["rho"]), 0.39025481256130345)
     _close_var(float(fit["theta"]["sigma2_u"]), 0.14441227236486576)
     _close(float(fit["log_lik"]), -45.257483655355536, rel=1e-6)
-    _close(float(fit["AIC"]), 102.51496731071107, rel=1e-5)
+    # AIC/BIC re-captured in 0.2.7: they now use the ML logLik, not REML
+    # (REML likelihoods are not comparable across designs).
+    _close(float(fit["AIC"]), 99.4389367276702, rel=1e-5)
 
 
 def test_golden_gaussian_m2_ar1():
@@ -127,4 +129,5 @@ def test_golden_gaussian_m2_ar1():
     _close_var(float(fit["theta"]["sigma2_eta"]), 0.1223495742764354)
     _close_var(float(fit["theta"]["phi"]), 0.42931590778846695)
     _close(float(fit["log_lik"]), -73.57848839767219, rel=1e-6)
-    _close(float(fit["BIC"]), 173.44913660338767, rel=1e-5)
+    # BIC re-captured in 0.2.7: ML logLik basis, same reason as the m3 test.
+    _close(float(fit["BIC"]), 167.65222801299032, rel=1e-5)

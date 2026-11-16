@@ -3,6 +3,46 @@
 All notable changes to `stmmlib`. Format follows Keep-a-Changelog; versions
 follow Semantic Versioning.
 
+## [0.2.7] - 2026-11-17
+
+### Fixed
+
+- Gaussian `AIC`/`BIC` are computed from the ML log-likelihood at the fitted
+  variance parameters. With the default `method="REML"` they used the
+  restricted log-likelihood, which is not comparable across designs (it
+  conditions on the fixed-effects design).
+- Wald p-values no longer underflow to exactly 0: `norm.sf` replaces
+  `1 - norm.cdf`. A z of -12.2 used to print `0.000000e+00`; it now reports
+  `2.4e-34`. Same correction for the boundary-mixture p (`lrt.py`) and the
+  Ljung-Box p (`beta/report.py`).
+- `predict(X)` and `predict_interval(X)` interpret `X` on the original
+  predictor scale and apply the fit's centering/scaling internally. They used
+  to multiply raw `X` by standardized coefficients, silently returning the
+  wrong mean. Pass `standardized=True` for an `opt["X"]`-scale design.
+- `predict_interval` observation variance uses the delta-method value
+  `1/((1+phi) mu (1-mu))` instead of `1/(phi mu (1-mu))`.
+- A likelihood-ratio p-value is no longer reported when the objective is
+  penalized (MAP): `2*dlogLik` is not chi2_1 there. `lrt_fixed_effects` now
+  recovers the fit's config (stored in `opt["fit_config"]`) so the reduced
+  refits use the same bounds and prior, and penalized rows carry `p=None`
+  with a `p_note`.
+- `lrt_fixed_effects` defaults `prov_col`/`kab_col` to `"prov"`/`"kab"`,
+  matching `stmm` and `_sanitize_data`; nested data no longer fails with
+  `unexpected predictors ['prov']`.
+- `beta_criteria` NaN results carry a `reason` field (nested precision,
+  stale inputs); `report.evaluate` forwards it.
+- `wald_table_beta` reports `certificate_valid` on every row and accepts
+  `fixed_only=True`; a non-inference-grade fit is now visible at the table.
+- A SAR area block without `W` raises at the fit level too, and
+  `build_beta_Q` no longer falls back to an identity matrix (which silently
+  turned SAR into iid) and rejects a `W` whose shape mismatches `n_area`.
+- `lrt_fixed_terms` rows carry a `term` alias next to the term key.
+
+### Changed
+
+- `pyproject.toml` sets `testpaths = ["tests"]`; bare `pytest` no longer
+  collects `script/tesis/test_real_one_term.py`.
+
 ## [0.2.6] - 2026-11-15
 
 ### Fixed

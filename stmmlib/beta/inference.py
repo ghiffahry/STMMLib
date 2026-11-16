@@ -85,7 +85,8 @@ def compute_stbl_inference(optim_results: dict, method: str = "numeric",
         se = np.full(n_params, np.nan)
 
     tvalues = param_vec / se
-    pvalues = 2 * (1 - norm.cdf(np.abs(tvalues)))
+    # norm.sf, not 1-cdf: the latter underflows to exactly 0 for |z| > ~8
+    pvalues = 2 * norm.sf(np.abs(tvalues))
 
     # Parameter labels (shared with the skip_hessian path below)
     labels = _inference_labels(optim_results, raw_dep, ksd, p)

@@ -34,6 +34,19 @@ from stmmlib.gaussian.gls import (
 )
 
 
+def _aic_bic_ml(loglik_ml, theta_hat, log_lik, method, k, n):
+    """AIC/BIC from the ML likelihood at the fitted variance parameters.
+
+    REML logLik conditions on the fixed-effects design, so it is not
+    comparable across models with different X; AIC/BIC built from it are
+    meaningless. The variance parameters stay at the fit's theta_hat.
+
+    Returns (AIC, BIC, logLik used).
+    """
+    ll = float(loglik_ml(theta_hat)) if str(method).upper() == "REML" else float(log_lik)
+    return compute_AIC(ll, k), -2.0 * ll + np.log(n) * k, ll
+
+
 def _warn_unused_conventional_columns(data, x_cols):
     """Warn when the frame carries the conventional grouping names that this
     model excludes.
@@ -177,8 +190,10 @@ def stmm_normal_core(
 
     # AIC/BIC
     k = len(opt["theta_hat"]) + X.shape[1]
-    aic = compute_AIC(log_lik, k)
-    bic = -2 * log_lik + np.log(n) * k
+    # REML logLik is not comparable across designs; AIC/BIC use ML at theta_hat.
+    aic, bic, _ll_aic = _aic_bic_ml(
+        lambda th: logLik_ML(th, y, X, prepared, model, backend),
+        theta_hat, log_lik, method, k, n)
 
     # GLS at optimal theta
     from stmmlib.gaussian.gls import gls as _gls, common_components
@@ -345,6 +360,12 @@ def seblup_rao_yu_it(
     gls_res = _gls(y, X, V, backend)
     k = len(theta_hat) + X.shape[1]
     log_lik = opt["log_lik"]
+    # REML logLik is not comparable across designs; AIC/BIC use ML at theta_hat.
+    from stmmlib.gaussian.gls import logLik_seblup5
+    aic, bic, _ll_aic = _aic_bic_ml(
+        lambda th: logLik_seblup5(th, y, X, prepared, interaction, area_type,
+                                  "ML", backend),
+        theta_hat, log_lik, method, k, n)
 
     # EBLUP at theta_hat (Henderson): v_hat = G_a Z_a' V^-1 e,
     # u_hat = (I_m (x) G_u) Z_c' V^-1 e. V is the one already built above, so
@@ -386,8 +407,8 @@ def seblup_rao_yu_it(
         "blup": {"v_hat": v_hat, "u_hat": u_hat,
                  "beta_hat": gls_res["beta_hat"]},
         "data": prepared,
-        "log_lik": log_lik, "AIC": compute_AIC(log_lik, k),
-        "BIC": -2 * log_lik + np.log(n) * k, "k": k,
+        "log_lik": log_lik, "AIC": aic,
+        "BIC": bic, "k": k,
         "converged": opt["converged"],
         # The LRT needs the design, the response and the predictor names
         "X": X, "y": y, "x_cols": list(x_cols),
@@ -436,6 +457,11 @@ def nested_iid_iid(
     theta_hat = opt["theta_hat"]
     k = len(theta_hat) + X.shape[1]
     log_lik = opt["log_lik"]
+    # REML logLik is not comparable across designs; AIC/BIC use ML at theta_hat.
+    from stmmlib.gaussian.gls import logLik_nested
+    aic, bic, _ll_aic = _aic_bic_ml(
+        lambda th: logLik_nested(th, y, X, prepared, interaction, "ML", backend),
+        theta_hat, log_lik, method, k, n)
 
     # GLS at optimal theta + Henderson BLUP
     from stmmlib.gaussian.covariance import build_V_nested
@@ -457,7 +483,7 @@ def nested_iid_iid(
         "residuals": gls_res["residuals"], "fitted": gls_res["fitted"],
         "blup": blup,
         "log_lik": log_lik,
-        "AIC": compute_AIC(log_lik, k), "BIC": -2 * log_lik + np.log(n) * k, "k": k,
+        "AIC": aic, "BIC": bic, "k": k,
         "converged": opt["converged"],
         # The LRT needs the design, the response and the predictor names
         "X": X, "y": y, "x_cols": list(x_cols),
@@ -505,6 +531,11 @@ def nested_iid_ar1(
     theta_hat = opt["theta_hat"]
     k = len(theta_hat) + X.shape[1]
     log_lik = opt["log_lik"]
+    # REML logLik is not comparable across designs; AIC/BIC use ML at theta_hat.
+    from stmmlib.gaussian.gls import logLik_nested_ar1
+    aic, bic, _ll_aic = _aic_bic_ml(
+        lambda th: logLik_nested_ar1(th, y, X, prepared, interaction, "ML", backend),
+        theta_hat, log_lik, method, k, n)
 
     # GLS at optimal theta + Henderson BLUP
     from stmmlib.gaussian.covariance import build_V_nested_ar1
@@ -526,7 +557,7 @@ def nested_iid_ar1(
         "residuals": gls_res["residuals"], "fitted": gls_res["fitted"],
         "blup": blup,
         "log_lik": log_lik,
-        "AIC": compute_AIC(log_lik, k), "BIC": -2 * log_lik + np.log(n) * k, "k": k,
+        "AIC": aic, "BIC": bic, "k": k,
         "converged": opt["converged"],
         # The LRT needs the design, the response and the predictor names
         "X": X, "y": y, "x_cols": list(x_cols),
