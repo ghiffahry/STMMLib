@@ -10,6 +10,7 @@ Modules:
     fit: stmm_beta(), betaml() top-level fitting
     diagnostics: Residuals, ACF, Dunn-Smyth, Moran panel, Ljung-Box
     criteria: conditional AIC / conditional R-squared for flat models
+    marginal: response-scale marginal effects for fixed effects
     report: diagnostics report and convergence certificate
     lrt_fixed: restricted-refit likelihood ratio test for fixed effects
     config: numerical bounds and tolerances (single source of truth)
