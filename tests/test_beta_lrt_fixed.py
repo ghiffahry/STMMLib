@@ -497,6 +497,15 @@ def test_lrt_statistic_agrees_with_the_wald_statistic(df_flat):
     assert abs(D - z * z) / max(z * z, 1e-12) < 0.10, (D, z * z)
 
 
+def test_phi_at_bound_uses_both_bounds():
+    from stmmlib.beta.config import BetaFitConfig
+    from stmmlib.beta.lrt_fixed import _phi_at_bound
+
+    cfg = BetaFitConfig(logphi_bounds=(-10.0, 0.0))
+    assert _phi_at_bound({"logphi": 0.0}, cfg) is True
+    assert _phi_at_bound({"logphi": -5.0}, cfg) is False
+
+
 def test_refinement_projects_the_step_onto_the_active_set(monkeypatch):
     """The Newton step must not go into the coordinates that sit on a bound.
 

@@ -100,8 +100,8 @@ def _phi_at_bound(opt: dict, config=None) -> bool:
     from stmmlib.beta.config import BetaFitConfig
     cfg = config if config is not None else BetaFitConfig()
     logphi = float(np.asarray(opt["logphi"], dtype=float).ravel()[0])
-    hi = float(cfg.logphi_bounds[1])
-    return abs(logphi) >= hi - 1e-6
+    lo, hi = (float(v) for v in cfg.logphi_bounds)
+    return logphi <= lo + 1e-6 or logphi >= hi - 1e-6
 
 
 def _hessian(opt: dict):
