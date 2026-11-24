@@ -25,6 +25,8 @@ depend on that dataset, and is published as a software reference.
 - Configurable column names, so data does not need renaming
 - Fixed-effect inference in both families: Wald tests and restricted-refit
   likelihood-ratio tests (`inference="lrt"`, `lrt_terms=[...]`)
+- Response-scale marginal effects for Beta fixed effects (AME or at the mean),
+  with delta-method SE and percentage-point scaling
 - Optional PyTorch GPU acceleration for the Beta inner solves (`gpu="yes"`)
 
 ## Installation
@@ -162,7 +164,9 @@ prediction intervals.
 ## Limitations
 
 - EBP here means `E[mu | y]`, computed from posterior draws. It is not the
-  Molina-Rao EBP, and its mean squared error is not implemented.
+  Molina-Rao EBP. No analytic MSE is implemented; `mse_ebp` and `mse_eblup`
+  in `stmmlib.mse` provide a single-layer parametric bootstrap for flat
+  models only.
 - The Gaussian path is CPU only. Run it with `gpu="no"`.
 - Gaussian fits return a dict, Beta fits return an object. The two return types
   are not unified yet.
@@ -190,7 +194,7 @@ prediction intervals.
   author  = {Ghiffary, Ghardapaty},
   title   = {STMMLib: spatio-temporal mixed models for areal panel data},
   year    = {2026},
-  version = {0.2.7},
+  version = {0.2.8},
   url     = {https://github.com/ghiffahry/STMMLib},
   license = {MIT}
 }

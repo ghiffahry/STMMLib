@@ -3,6 +3,31 @@
 All notable changes to `stmmlib`. Format follows Keep-a-Changelog; versions
 follow Semantic Versioning.
 
+## [0.2.8] - 2026-11-24
+
+### Added
+
+- Response-scale marginal effects for Beta fixed effects:
+  `stmmlib.beta.marginal.marginal_effects(fit, at="average", scale=1.0,
+  level=0.95)`. `at="average"` reports the average marginal effect over the
+  fitted rows; `at="mean"` reports the effect at the mean covariate profile.
+  Delta-method SE, z, p, and CI are returned. `scale=100` converts the
+  estimate, SE, and CI to percentage points. The intercept is excluded and
+  terms use the original predictor names.
+
+### Fixed
+
+- `_phi_at_bound` compares `logphi` with both configured bounds. With an
+  asymmetric `BetaFitConfig(logphi_bounds=...)`, the old `abs(logphi)` test
+  could flag an interior precision or miss a lower-bound hit.
+
+### Changed
+
+- README no longer claims the EBP mean squared error is unimplemented. The
+  parametric bootstrap `mse_ebp` and `mse_eblup` are documented as flat-model
+  features; only the analytic MSE is absent.
+- Citation metadata and the PyPI long description now report 0.2.8.
+
 ## [0.2.7] - 2026-11-17
 
 ### Fixed

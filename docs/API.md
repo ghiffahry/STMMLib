@@ -123,6 +123,13 @@ cfg = BetaFitConfig(rho_bound=0.90, phi_bound=0.95, auto_prior=False)
 | `ranef()`, `coef()`, `predict(X_new)` | efek acak, koefisien, prediksi (X_new skala asli; `standardized=True` untuk skala internal) |
 | `predict_interval(X=None, level=0.95, include_obs=True, standardized=False)` | PI logit-delta (P5); `X` skala asli, `standardized=True` untuk skala internal; `ValueError` bila `vcov` tidak tersedia |
 | `stmmlib.beta.criteria.beta_criteria(fit)` | cAIC, df_hat, cR2 marginal/conditional, komponen varian; NaN disertai `reason` |
+| `stmmlib.beta.marginal.marginal_effects(fit, at="average", scale=1.0, level=0.95)` | efek marginal efek tetap Beta pada skala respons; `at="mean"` untuk profil kovariat rata-rata; `scale=100` untuk poin persentase; SE delta-method, NaN bila `vcov` tidak ada |
+
+```python
+from stmmlib.beta.marginal import marginal_effects
+
+me = marginal_effects(fit, at="average", scale=100)  # poin persentase
+```
 
 ## Diagnostik (satu pintu)
 
